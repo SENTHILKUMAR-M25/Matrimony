@@ -31,31 +31,32 @@ const stories = [
 
 const SuccessStories = () => {
   return (
-    <section id="success-stories" className="py-20 gradient-gold overflow-hidden">
+    <section id="success-stories" className="py-16 sm:py-20 gradient-gold overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl font-display font-bold text-white mb-4">Success Stories</h2>
+        <div className="text-center mb-10 sm:mb-16">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold text-white mb-4">Success Stories</h2>
           <div className="decorative-line !bg-white/50"></div>
         </div>
 
         <Swiper
           modules={[Navigation, Pagination, Autoplay]}
-          spaceBetween={30}
+          spaceBetween={20}
           slidesPerView={1}
           breakpoints={{
-            768: { slidesPerView: 2 },
-            1024: { slidesPerView: 3 },
+            640: { slidesPerView: 1, spaceBetween: 20 },
+            768: { slidesPerView: 2, spaceBetween: 24 },
+            1024: { slidesPerView: 3, spaceBetween: 30 },
           }}
           pagination={{ clickable: true }}
           autoplay={{ delay: 5000, disableOnInteraction: false }}
-          className="pb-12"
+          className="pb-10 sm:pb-12"
         >
           {stories.map((story) => (
             <SwiperSlide key={story.id}>
               <div className="bg-white rounded-2xl overflow-hidden shadow-xl h-full flex flex-col transform transition-transform duration-300 hover:-translate-y-2">
-                <img src={story.image} alt={story.name} className="w-full h-64 object-cover" />
-                <div className="p-8 flex-grow flex flex-col">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">{story.name}</h3>
+                <img src={story.image} alt={story.name} className="w-full h-48 sm:h-56 md:h-64 object-cover" />
+                <div className="p-5 sm:p-6 md:p-8 flex-grow flex flex-col">
+                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mb-2">{story.name}</h3>
                   <div className="flex text-gold-500 mb-4">
                     {[...Array(5)].map((_, i) => (
                       <Star key={i} className={`w-5 h-5 ${i < story.rating ? 'fill-current' : 'text-gray-300'}`} />

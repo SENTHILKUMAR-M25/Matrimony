@@ -1,46 +1,47 @@
 @import "tailwindcss";
 
 @theme {
-  --color-pink-50: #fdf2f8;
-  --color-pink-100: #fce7f3;
-  --color-pink-200: #fbcfe8;
-  --color-pink-300: #f8b4d8;
-  --color-pink-400: #f472b6;
-  --color-pink-500: #ec4899;
-  --color-pink-600: #db2777;
-  --color-pink-700: #be185d;
-  --color-pink-800: #9d174d;
-  --color-pink-900: #831843;
+  --color-pink-50: #F8F4FC;
+  --color-pink-100: #F0EAF8;
+  --color-pink-200: #E4DAEE;
+  --color-pink-300: #D4BEE4;
+  --color-pink-400: #C4A8DA;
+  --color-pink-500: #9B7EBD;
+  --color-pink-600: #7A5DA0;
+  --color-pink-700: #5C3D82;
+  --color-pink-800: #3B1E54;
+  --color-pink-900: #2A1540;
 
-  --color-maroon-50: #fdf2f4;
-  --color-maroon-100: #fce7eb;
-  --color-maroon-200: #f9d0d9;
-  --color-maroon-300: #f4a9ba;
-  --color-maroon-400: #ec7896;
-  --color-maroon-500: #e04e76;
-  --color-maroon-600: #cf2f5e;
-  --color-maroon-700: #800020;
-  --color-maroon-800: #6b001a;
-  --color-maroon-900: #5a0015;
+  --color-maroon-50: #F4F0F8;
+  --color-maroon-100: #EBE3F2;
+  --color-maroon-200: #E0D5EC;
+  --color-maroon-300: #C4A8DA;
+  --color-maroon-400: #B093CD;
+  --color-maroon-500: #9B7EBD;
+  --color-maroon-600: #7A5DA0;
+  --color-maroon-700: #3B1E54;
+  --color-maroon-800: #2A1540;
+  --color-maroon-900: #1C0D2C;
 
-  --color-gold-50: #fff9e6;
-  --color-gold-100: #fff3cc;
-  --color-gold-200: #ffe799;
-  --color-gold-300: #ffdb66;
-  --color-gold-400: #ffcf33;
-  --color-gold-500: #ffc300;
-  --color-gold-600: #e6b000;
-  --color-gold-700: #cc9c00;
-  --color-gold-800: #b38900;
-  --color-gold-900: #997500;
+  --color-gold-50: #F8F6FA;
+  --color-gold-100: #F0ECF6;
+  --color-gold-200: #E8E0F0;
+  --color-gold-300: #D4BEE4;
+  --color-gold-400: #C4A8DA;
+  --color-gold-500: #9B7EBD;
+  --color-gold-600: #7A5DA0;
+  --color-gold-700: #5C3D82;
+  --color-gold-800: #3B1E54;
+  --color-gold-900: #2A1540;
 
-  --shadow-glow-pink: 0 0 20px rgba(236, 72, 153, 0.5);
-  --shadow-glow-pink-lg: 0 0 30px rgba(236, 72, 153, 0.7);
-  --shadow-glow-gold: 0 0 20px rgba(255, 195, 0, 0.5);
+  --shadow-glow-pink: 0 0 20px rgba(155, 126, 189, 0.5);
+  --shadow-glow-pink-lg: 0 0 30px rgba(155, 126, 189, 0.7);
+  --shadow-glow-gold: 0 0 20px rgba(212, 190, 228, 0.5);
   --shadow-premium: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-  --shadow-maroon: 0 4px 15px rgba(128, 0, 32, 0.3);
+  --shadow-maroon: 0 4px 15px rgba(59, 30, 84, 0.3);
 
   --font-display: 'Playfair Display', serif;
+  --font-great: 'Great Vibes', cursive;
 
   --animate-fade-in-up: fadeInUp 0.6s ease-out;
   --animate-float: float 6s ease-in-out infinite;
@@ -70,7 +71,7 @@
 }
 
 @utility gradient-text-pink {
-  @apply bg-gradient-to-r from-pink-500 via-pink-600 to-red-500 text-transparent bg-clip-text;
+  @apply bg-gradient-to-r from-pink-500 via-pink-600 to-pink-800 text-transparent bg-clip-text;
 }
 
 @utility premium-card {
@@ -94,13 +95,13 @@
 }
 
 @utility bg-gradient-section {
-  background: linear-gradient(to bottom, #fdf2f8, #ffffff, #fdf2f8);
+  background: linear-gradient(to bottom, #F8F4FC, #ffffff, #F8F4FC);
 }
 
 @utility gradient-gold {
-  background: linear-gradient(135deg, #db2777 0%, #be185d 50%, #800020 100%);
+  background: linear-gradient(135deg, #9B7EBD 0%, #7A5DA0 50%, #3B1E54 100%);
 }
 
 @utility gradient-maroon {
-  background: linear-gradient(135deg, #800020 0%, #6b001a 50%, #5a0015 100%);
+  background: linear-gradient(135deg, #3B1E54 0%, #2A1540 50%, #1C0D2C 100%);
 }

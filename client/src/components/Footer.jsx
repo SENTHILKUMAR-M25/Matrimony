@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 
 const Footer = () => {
   return (
-    <footer className="bg-gray-900 text-gray-300 pt-20 pb-10 border-t-4 border-maroon-700">
+    <footer className="gradient-maroon text-gray-100 pt-20 pb-10 border-t-4 border-maroon-700">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12 mb-16">
           
@@ -13,7 +13,7 @@ const Footer = () => {
             <Link to="/" className="text-2xl font-display font-bold text-white mb-6 block">
               JOD Matrimony
             </Link>
-            <p className="text-sm text-gray-400 mb-6">
+            <p className="text-sm text-gray-300 mb-6">
               Find your perfect life partner with our premium matchmaking service.
             </p>
             <div className="flex space-x-4">
@@ -84,7 +84,7 @@ const Footer = () => {
               <span>123 Matrimony Tower, Mumbai</span>
             </div>
           </div>
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-gray-400">
             &copy; {new Date().getFullYear()} JOD Matrimony. All rights reserved.
           </div>
         </div>

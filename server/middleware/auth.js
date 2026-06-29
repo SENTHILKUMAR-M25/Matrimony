@@ -2,7 +2,12 @@ const jwt = require('jsonwebtoken');
 
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer <token>
+  let token = authHeader && authHeader.split(' ')[1]; // Bearer <token>
+
+  // Also allow token from query param (for image src URLs)
+  if (!token) {
+    token = req.query.token;
+  }
 
   if (!token) {
     return res.status(401).json({ message: 'Access denied. No token provided.' });

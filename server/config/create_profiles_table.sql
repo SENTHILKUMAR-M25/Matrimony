@@ -31,6 +31,25 @@ CREATE TABLE IF NOT EXISTS profiles (
   state           VARCHAR(100),
   city            VARCHAR(100),
 
+  -- Astro Details
+  date_of_birth     DATE,
+  time_of_birth     VARCHAR(20),
+  place_of_birth    VARCHAR(150),
+  rasi              VARCHAR(50),
+  nakshatra         VARCHAR(50),
+  laknam            VARCHAR(50),
+  gothram           VARCHAR(100),
+  dhosham           VARCHAR(50),
+  horoscope_available TINYINT(1) DEFAULT 0,
+  horoscope_pdf     VARCHAR(500),
+  horoscope_image   VARCHAR(500),
+
+  -- Partner Astro Preferences
+  preferred_rasi         TEXT,
+  preferred_nakshatra    TEXT,
+  dhosham_preference     VARCHAR(50),
+  horoscope_match_required TINYINT(1) DEFAULT 0,
+
   -- Partner Preferences
   pref_age_min    INT,
   pref_age_max    INT,

@@ -1,0 +1,16 @@
+ALTER TABLE profiles
+  ADD COLUMN date_of_birth DATE,
+  ADD COLUMN time_of_birth VARCHAR(20),
+  ADD COLUMN place_of_birth VARCHAR(150),
+  ADD COLUMN rasi VARCHAR(50),
+  ADD COLUMN nakshatra VARCHAR(50),
+  ADD COLUMN laknam VARCHAR(50),
+  ADD COLUMN gothram VARCHAR(100),
+  ADD COLUMN dhosham VARCHAR(50),
+  ADD COLUMN horoscope_available TINYINT(1) DEFAULT 0,
+  ADD COLUMN horoscope_pdf VARCHAR(500),
+  ADD COLUMN horoscope_image VARCHAR(500),
+  ADD COLUMN preferred_rasi TEXT,
+  ADD COLUMN preferred_nakshatra TEXT,
+  ADD COLUMN dhosham_preference VARCHAR(50),
+  ADD COLUMN horoscope_match_required TINYINT(1) DEFAULT 0;

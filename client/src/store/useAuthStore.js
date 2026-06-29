@@ -10,7 +10,11 @@ const useAuthStore = create(
 
       login: (userData, token) => set({
         isAuthenticated: true,
-        user: userData,
+        user: {
+          ...userData,
+          subscription_type: userData.subscription_type || 'free',
+          viewed_profiles: userData.viewed_profiles || 0,
+        },
         token: token,
       }),
 
@@ -24,6 +28,10 @@ const useAuthStore = create(
         user: { ...state.user, ...profileData },
       })),
 
+      updateSubscription: (data) => set((state) => ({
+        user: { ...state.user, ...data },
+      })),
+
       // Calculate profile completion percentage based on key fields
       getProfileCompletion: (user) => {
         if (!user) return 0;
@@ -31,6 +39,11 @@ const useAuthStore = create(
           'fullName', 'age', 'religion', 'education',
           'occupation', 'country', 'state', 'city', 'profilePhoto',
         ];
+        // Astro fields count extra if religion is Hindu
+        const isHindu = user.religion && String(user.religion).toLowerCase() === 'hindu';
+        if (isHindu) {
+          requiredFields.push('rasi');
+        }
         let completed = 0;
         requiredFields.forEach((field) => {
           if (user[field] && String(user[field]).trim() !== '') completed++;

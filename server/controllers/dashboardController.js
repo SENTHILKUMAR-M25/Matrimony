@@ -14,6 +14,10 @@ const getDashboardStats = async (req, res) => {
               p.education, p.occupation, p.company_name, p.annual_income,
               p.father_name, p.mother_name, p.siblings,
               p.country, p.state, p.city,
+              p.date_of_birth, p.time_of_birth, p.place_of_birth,
+              p.rasi, p.nakshatra, p.laknam, p.gothram, p.dhosham,
+              p.horoscope_available, p.horoscope_pdf, p.horoscope_image,
+              p.preferred_rasi, p.preferred_nakshatra, p.dhosham_preference, p.horoscope_match_required,
               p.pref_age_min, p.pref_age_max, p.pref_height,
               p.pref_education, p.pref_location, p.pref_religion,
               p.profile_photo, p.additional_photos,
@@ -73,13 +77,14 @@ const getDashboardStats = async (req, res) => {
       memberSince: row.created_at,
     };
 
-    // Count potential matches (profiles of opposite gender, profile completed)
-    const oppositeGender = row.gender === 'Male' ? 'Female' : 'Male';
+    // Count potential matches (profiles of opposite gender, profile completed, case-insensitive)
+    const normalizedGender = (row.gender || '').toLowerCase();
+    const oppositeGender = normalizedGender === 'male' ? 'female' : 'male';
     const [[{ matchCount }]] = await pool.query(
       `SELECT COUNT(*) AS matchCount
        FROM users u
        INNER JOIN profiles p ON u.id = p.user_id
-       WHERE u.gender = ? AND p.profile_completed = 1 AND u.id != ?`,
+       WHERE LOWER(u.gender) = ? AND p.profile_completed = 1 AND u.id != ?`,
       [oppositeGender, userId]
     );
 

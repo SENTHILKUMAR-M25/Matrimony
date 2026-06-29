@@ -1,11 +1,17 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const cron = require('node-cron');
+const pool = require('./config/db');
 require('dotenv').config();
 
 const authRoutes = require('./routes/authRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const subscriptionRoutes = require('./routes/subscriptionRoutes');
+const interestRoutes = require('./routes/interestRoutes');
+const viewRoutes = require('./routes/viewRoutes');
+const communityRoutes = require('./routes/communityRoutes');
 
 const app = express();
 
@@ -19,6 +25,23 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api', subscriptionRoutes);
+app.use('/api', interestRoutes);
+app.use('/api', viewRoutes);
+app.use('/api', communityRoutes);
+
+// ─── Monthly Reset Cron Job ───
+// Runs at midnight on the 1st of every month
+cron.schedule('0 0 1 * *', async () => {
+  try {
+    await pool.query(
+      'UPDATE users SET viewed_profiles = 0, last_viewed_reset = NOW()'
+    );
+    console.log(`[CRON] Monthly profile view limits reset at ${new Date().toISOString()}`);
+  } catch (err) {
+    console.error('[CRON] Monthly reset failed:', err.message);
+  }
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
