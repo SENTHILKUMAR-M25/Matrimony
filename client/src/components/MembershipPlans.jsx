@@ -2,48 +2,10 @@ import { CheckCircle2, X, Crown, Sparkles } from "lucide-react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Pagination, Autoplay } from "swiper/modules";
 import { Link } from "react-router-dom";
+import useLandingData from "../hooks/useLandingData";
 
 import "swiper/css";
 import "swiper/css/pagination";
-
-const plans = [
-  {
-    name: "Free",
-    price: "₹0",
-    duration: "Forever",
-    description: "Get started and explore basic features at no cost.",
-    features: [
-      { text: "Create Your Profile", included: true },
-      { text: "Search & Browse Profiles", included: true },
-      { text: "View Contact Details", included: false },
-      { text: "Unlimited Interests", included: false },
-      { text: "Priority Listing", included: false },
-      { text: "Profile Boost", included: false },
-    ],
-    buttonText: "Get Started Free",
-    buttonLink: "/signup",
-    highlight: false,
-    popular: false,
-  },
-  {
-    name: "Premium",
-    price: "₹499",
-    duration: "month",
-    description: "Unlock full access and find your perfect match faster.",
-    features: [
-      { text: "Create Your Profile", included: true },
-      { text: "Search & Browse Profiles", included: true },
-      { text: "View Contact Details", included: true },
-      { text: "Unlimited Interests", included: true },
-      { text: "Priority Listing", included: true },
-      { text: "Profile Boost", included: true },
-    ],
-    buttonText: "Upgrade to Premium",
-    buttonLink: "/signup",
-    highlight: true,
-    popular: true,
-  },
-];
 
 const PlanCard = ({ plan }) => (
   <div
@@ -146,6 +108,37 @@ const PlanCard = ({ plan }) => (
 );
 
 const MembershipPlans = () => {
+  const { data } = useLandingData();
+  const plans = data?.membership?.plans || [
+    {
+      name: "Free", price: "₹0", duration: "Forever",
+      description: "Get started and explore basic features at no cost.",
+      features: [
+        { text: "Create Your Profile", included: true },
+        { text: "Search & Browse Profiles", included: true },
+        { text: "View Contact Details", included: false },
+        { text: "Unlimited Interests", included: false },
+        { text: "Priority Listing", included: false },
+        { text: "Profile Boost", included: false },
+      ],
+      buttonText: "Get Started Free", buttonLink: "/signup",
+      highlight: false, popular: false,
+    },
+    {
+      name: "Premium", price: "₹499", duration: "month",
+      description: "Unlock full access and find your perfect match faster.",
+      features: [
+        { text: "Create Your Profile", included: true },
+        { text: "Search & Browse Profiles", included: true },
+        { text: "View Contact Details", included: true },
+        { text: "Unlimited Interests", included: true },
+        { text: "Priority Listing", included: true },
+        { text: "Profile Boost", included: true },
+      ],
+      buttonText: "Upgrade to Premium", buttonLink: "/signup",
+      highlight: true, popular: true,
+    },
+  ];
   return (
     <section id="membership" className="py-16 sm:py-20 lg:py-24 bg-gradient-to-b from-white to-pink-50/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

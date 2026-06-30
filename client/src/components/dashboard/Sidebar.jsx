@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   LayoutDashboard, UserCircle, Users, Search, Heart,
-  CreditCard, Bell, Settings, LogOut, X
+  CreditCard, Bell, Settings, LogOut, X, HeartHandshake,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -20,6 +20,7 @@ const navItems = [
   { name: 'My Profile', path: '/dashboard/profile', icon: UserCircle },
   { name: 'Matches', path: '/dashboard/matches', icon: Users },
   { name: 'Interests', path: '/dashboard/interests', icon: Heart },
+  { name: 'Success Stories', path: '/dashboard/my-stories', icon: HeartHandshake },
   { name: 'Subscription', path: '/dashboard/subscription', icon: CreditCard },
   { name: 'Notifications', path: '/dashboard/notifications', icon: Bell },
   { name: 'Settings', path: '/dashboard/settings', icon: Settings },

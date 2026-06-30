@@ -14,9 +14,15 @@ const useAuthStore = create(
           ...userData,
           subscription_type: userData.subscription_type || 'free',
           viewed_profiles: userData.viewed_profiles || 0,
+          is_admin: userData.is_admin || false,
         },
         token: token,
       }),
+
+      isAdmin: () => {
+        const state = get();
+        return state.isAuthenticated && state.user?.is_admin === true;
+      },
 
       logout: () => set({
         isAuthenticated: false,

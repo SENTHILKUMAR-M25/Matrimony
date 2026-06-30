@@ -8,7 +8,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Crown, Zap, X, Eye, Phone, MessageCircle, User, Star 
+  Crown, Zap, X, Eye, Phone, MessageCircle, User, Star, FileText, Loader2
 } from 'lucide-react';
 import API from '../../api/axios';
 import useAuthStore from '../../store/useAuthStore';
@@ -25,6 +25,7 @@ const ProfileDetail = () => {
   const [upgrading, setUpgrading] = useState(false);
   const [interestStatus, setInterestStatus] = useState(null);
   const [sendingInterest, setSendingInterest] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -92,6 +93,31 @@ const ProfileDetail = () => {
     }
   };
 
+  const handleDownloadPdf = async () => {
+    try {
+      setDownloadingPdf(true);
+      const currentToken = token || localStorage.getItem('token');
+      const res = await API.get(`/profile/${id}/biodata`, {
+        headers: { Authorization: `Bearer ${currentToken}` },
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      const name = profile?.fullName ? `Biodata_${profile.fullName.replace(/\s+/g, '_')}.pdf` : 'Biodata.pdf';
+      link.setAttribute('download', name);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download failed:', err);
+      alert('Failed to download biodata. Please try again.');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh] px-4">
@@ -127,11 +153,23 @@ const ProfileDetail = () => {
       className="max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 pb-8 sm:pb-12"
     >
       {profile.profileId && (
-        <div className="flex justify-center mb-3 sm:mb-4">
+        <div className="flex flex-col items-center gap-3 mb-3 sm:mb-4">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] sm:text-xs font-bold bg-[#3B1E54]/10 text-[#3B1E54] border border-pink-200 tracking-wider shadow-xs">
             <Star size={12} className="text-pink-500" />
             Profile ID: {profile.profileId}
           </span>
+          <button
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-pink-600 to-rose-600 text-white text-xs sm:text-sm font-semibold rounded-xl hover:from-pink-700 hover:to-rose-700 transition-all active:scale-[0.97] shadow-md shadow-pink-500/20 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {downloadingPdf ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : (
+              <FileText size={15} />
+            )}
+            {downloadingPdf ? 'Generating...' : 'Download Biodata (PDF)'}
+          </button>
         </div>
       )}
       <ProfileBook

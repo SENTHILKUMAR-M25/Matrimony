@@ -12,6 +12,9 @@ const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const interestRoutes = require('./routes/interestRoutes');
 const viewRoutes = require('./routes/viewRoutes');
 const communityRoutes = require('./routes/communityRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const successStoryRoutes = require('./routes/successStoryRoutes');
+const landingRoutes = require('./routes/landingRoutes');
 
 const app = express();
 
@@ -29,6 +32,9 @@ app.use('/api', subscriptionRoutes);
 app.use('/api', interestRoutes);
 app.use('/api', viewRoutes);
 app.use('/api', communityRoutes);
+app.use('/api', successStoryRoutes);
+app.use('/api', landingRoutes);
+app.use('/api', adminRoutes);
 
 // ─── Monthly Reset Cron Job ───
 // Runs at midnight on the 1st of every month

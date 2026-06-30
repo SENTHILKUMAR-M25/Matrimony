@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 
 const authMiddleware = require('../middleware/auth');
-const { createProfile, getProfile, getProfileById } = require('../controllers/profileController');
+const { createProfile, getProfile, getProfileById, downloadBiodata } = require('../controllers/profileController');
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -50,5 +50,6 @@ const uploadFields = upload.fields([
 router.post('/create', authMiddleware, uploadFields, createProfile);
 router.get('/me', authMiddleware, getProfile);
 router.get('/:id', authMiddleware, getProfileById);
+router.get('/:id/biodata', authMiddleware, downloadBiodata);
 
 module.exports = router;

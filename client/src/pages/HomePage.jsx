@@ -1,6 +1,6 @@
 import HeroSection from '../components/HeroSection'
 import WePromiseFor from '../components/WePromiseFor'
-import SuccessStories from '../components/SuccessStories'
+import SuccessStoriesSection from '../components/SuccessStoriesSection'
 import MembershipPlans from '../components/MembershipPlans'
 import CTASection from '../components/CTASection'
 
@@ -9,7 +9,7 @@ const HomePage = () => {
     <div className="min-h-screen bg-gradient-section text-gray-800">
       <HeroSection />
       <WePromiseFor />
-      <SuccessStories />
+      <SuccessStoriesSection />
       <MembershipPlans />
       <CTASection />
     </div>

@@ -468,7 +468,8 @@ async function seed() {
 
   const password = await bcrypt.hash('password123', SALT_ROUNDS);
 
-  for (const data of seedData) {
+  for (let index = 0; index < seedData.length; index++) {
+    const data = seedData[index];
     try {
       const [result] = await conn.execute(
         `INSERT INTO users (first_name, last_name, email, mobile, password, gender, subscription_type, viewed_profiles, last_viewed_reset)
@@ -476,6 +477,17 @@ async function seed() {
         [data.firstName, data.lastName, data.email, data.mobile, password, data.gender]
       );
       const userId = result.insertId;
+
+      // Assign approval_status for realistic admin review workflow
+      const assignment = [
+        'pending', 'pending', 'pending', 'pending', 'pending',
+        'pending', 'pending', 'pending', 'pending', 'pending',
+        'approved', 'approved', 'approved', 'approved', 'approved',
+        'approved', 'approved', 'approved', 'approved', 'approved',
+        'rejected', 'rejected', 'rejected', 'rejected', 'rejected',
+        'revision', 'revision', 'revision', 'revision', 'revision',
+      ];
+      const approvalStatus = assignment[index];
 
       await conn.execute(
         `INSERT INTO profiles (
@@ -489,8 +501,8 @@ async function seed() {
           horoscope_available,
           preferred_rasi, preferred_nakshatra, dhosham_preference, horoscope_match_required,
           pref_age_min, pref_age_max, pref_height, pref_education, pref_location, pref_religion,
-          profile_completed
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+          profile_completed, approval_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
         [
           userId,
           data.fullName, data.age, data.height, data.weight,
@@ -506,6 +518,7 @@ async function seed() {
           data.dhoshamPreference || null,
           data.horoscopeMatchRequired ? 1 : 0,
           data.prefAgeMin, data.prefAgeMax, data.prefHeight, data.prefEducation, data.prefLocation, data.prefReligion,
+          approvalStatus,
         ]
       );
 

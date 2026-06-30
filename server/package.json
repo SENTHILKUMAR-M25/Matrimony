@@ -7,6 +7,7 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "init:db": "node scripts/initDb.js",
+    "seed:admin": "node scripts/seedAdmin.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -23,6 +24,7 @@
     "mysql2": "^3.22.5",
     "node-cron": "^4.5.0",
     "nodemailer": "^9.0.1",
+    "pdfmake": "^0.3.11",
     "uuid": "^14.0.1"
   },
   "devDependencies": {

@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
+const { sendWelcomeEmail } = require('../utils/email');
 
 const SALT_ROUNDS = 10;
 
@@ -36,6 +37,8 @@ const signup = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
+
+    sendWelcomeEmail(email, firstName);
 
     return res.status(201).json({
       message: 'Account created successfully',
@@ -106,7 +109,7 @@ const login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user.id, email: user.email },
+      { id: user.id, email: user.email, is_admin: user.is_admin || 0 },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -126,6 +129,7 @@ const login = async (req, res) => {
         email: user.email,
         mobile: user.mobile,
         gender: user.gender ? user.gender.toLowerCase() : null,
+        is_admin: Boolean(user.is_admin),
         profileCompleted: Boolean(user.profile_completed),
         profilePic,
         subscription_type: user.subscription_type || 'free',

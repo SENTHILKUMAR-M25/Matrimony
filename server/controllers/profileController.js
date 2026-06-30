@@ -1,5 +1,7 @@
 const pool = require('../config/db');
 const path = require('path');
+const { generateBiodata } = require('../utils/biodataPdf');
+const { sendAppreciationEmail } = require('../utils/email');
 
 // POST /api/profile/create
 const createProfile = async (req, res) => {
@@ -142,6 +144,12 @@ const createProfile = async (req, res) => {
     const profile = profileRows[0];
 
     const profileId = `JODM-${String(profile.id).padStart(3, '0')}`;
+
+    pool.query('SELECT first_name, email FROM users WHERE id = ?', [userId])
+      .then(([[userRow]]) => {
+        if (userRow) sendAppreciationEmail(userRow.email, userRow.first_name);
+      })
+      .catch(() => {});
 
     return res.status(200).json({
       message: 'Profile saved successfully',
@@ -410,4 +418,50 @@ const getProfileById = async (req, res) => {
   }
 };
 
-module.exports = { createProfile, getProfile, getProfileById };
+// GET /api/profile/:id/biodata — Download PDF Biodata
+const downloadBiodata = async (req, res) => {
+  const viewerId = req.user.id;
+  const profileId = parseInt(req.params.id, 10);
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT u.id, u.first_name, u.last_name, u.email, u.mobile, u.gender,
+              p.*
+       FROM users u
+       LEFT JOIN profiles p ON u.id = p.user_id
+       WHERE u.id = ? AND p.profile_completed = 1`,
+      [profileId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Profile not found' });
+    }
+
+    const row = rows[0];
+    const [viewerRows] = await pool.query(
+      'SELECT subscription_type FROM users WHERE id = ?',
+      [viewerId]
+    );
+    const viewer = viewerRows[0];
+    const isOwnProfile = viewerId === profileId;
+    const isPremium = isOwnProfile || viewer?.subscription_type === 'premium';
+
+    const profile = formatProfile(row);
+
+    const pdfDoc = generateBiodata(profile, row, isPremium);
+    const buffer = await pdfDoc.getBuffer();
+
+    const filename = `Biodata_${(profile.fullName || 'Profile').replace(/\s+/g, '_')}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    res.end(buffer);
+  } catch (error) {
+    console.error('--- BIODATA PDF ERROR ---', error.message);
+    console.error(error.stack);
+    return res.status(500).json({ message: 'Failed to generate biodata.', error: error.message });
+  }
+};
+
+module.exports = { createProfile, getProfile, getProfileById, downloadBiodata };
