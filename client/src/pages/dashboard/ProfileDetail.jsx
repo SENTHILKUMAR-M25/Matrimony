@@ -8,7 +8,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Crown, Zap, X, Eye, Phone, MessageCircle, User, Star, FileText, Loader2
+  Crown, Zap, X, Eye, Phone, MessageCircle, User, Star, Download, FileDown, Loader2
 } from 'lucide-react';
 import API from '../../api/axios';
 import useAuthStore from '../../store/useAuthStore';
@@ -17,15 +17,17 @@ import ProfileBook from '../../components/ProfileBook';
 const ProfileDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { token } = useAuthStore();
+  const { token, user } = useAuthStore();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [interestStatus, setInterestStatus] = useState(null);
   const [sendingInterest, setSendingInterest] = useState(false);
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  const viewerIsPremium = user?.subscription_type === 'premium';
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -57,18 +59,41 @@ const ProfileDetail = () => {
     fetchProfile();
   }, [id, token]);
 
-  const handleUpgrade = async () => {
+  const handleUpgrade = () => {
+    setShowUpgradeModal(false);
+    navigate('/dashboard/subscription');
+  };
+
+  const handleDownloadBiodata = async () => {
+    if (!viewerIsPremium) {
+      setShowUpgradeModal(true);
+      return;
+    }
     try {
-      setUpgrading(true);
+      setDownloading(true);
       const currentToken = token || localStorage.getItem('token');
-      await API.post('/subscription/upgrade', { plan: 'monthly' }, { headers: { Authorization: `Bearer ${currentToken}` } });
-      setShowUpgradeModal(false);
-      window.location.reload();
+      const res = await API.get(`/profile/${id}/biodata`, {
+        responseType: 'blob',
+        headers: { Authorization: `Bearer ${currentToken}` },
+      });
+      const filename = `${profile?.profileId || 'biodata'}_JOD_Matrimony.pdf`;
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
     } catch (err) {
-      const msg = err.response?.data?.message || 'Upgrade failed. Please try again.';
-      alert(msg);
+      if (err.response?.status === 403) {
+        setShowUpgradeModal(true);
+      } else {
+        const msg = err.response?.data?.message || 'Failed to download biodata. Please try again.';
+        alert(msg);
+      }
     } finally {
-      setUpgrading(false);
+      setDownloading(false);
     }
   };
 
@@ -93,30 +118,6 @@ const ProfileDetail = () => {
     }
   };
 
-  const handleDownloadPdf = async () => {
-    try {
-      setDownloadingPdf(true);
-      const currentToken = token || localStorage.getItem('token');
-      const res = await API.get(`/profile/${id}/biodata`, {
-        headers: { Authorization: `Bearer ${currentToken}` },
-        responseType: 'blob',
-      });
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      const name = profile?.fullName ? `Biodata_${profile.fullName.replace(/\s+/g, '_')}.pdf` : 'Biodata.pdf';
-      link.setAttribute('download', name);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Download failed:', err);
-      alert('Failed to download biodata. Please try again.');
-    } finally {
-      setDownloadingPdf(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -158,17 +159,28 @@ const ProfileDetail = () => {
             <Star size={12} className="text-pink-500" />
             Profile ID: {profile.profileId}
           </span>
+
           <button
-            onClick={handleDownloadPdf}
-            disabled={downloadingPdf}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-pink-600 to-rose-600 text-white text-xs sm:text-sm font-semibold rounded-xl hover:from-pink-700 hover:to-rose-700 transition-all active:scale-[0.97] shadow-md shadow-pink-500/20 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+            type="button"
+            onClick={handleDownloadBiodata}
+            disabled={downloading}
+            className="group relative inline-flex items-center justify-center gap-2 sm:gap-2.5 px-5 sm:px-7 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-bold text-[11px] sm:text-sm uppercase tracking-wider text-white shadow-lg shadow-[#7F55B1]/25 transition-all duration-300 hover:shadow-xl hover:shadow-[#7F55B1]/30 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 cursor-pointer overflow-hidden"
+            style={{ background: 'linear-gradient(135deg, #7F55B1 0%, #9B7EBD 50%, #B8860B 100%)' }}
           >
-            {downloadingPdf ? (
-              <Loader2 size={15} className="animate-spin" />
+            <span className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+            {downloading ? (
+              <Loader2 size={16} className="animate-spin relative z-10" />
             ) : (
-              <FileText size={15} />
+              <FileDown size={16} className="relative z-10" />
             )}
-            {downloadingPdf ? 'Generating...' : 'Download Biodata (PDF)'}
+            <span className="relative z-10">
+              {downloading ? 'Generating PDF…' : 'Download Biodata (PDF)'}
+            </span>
+            {!viewerIsPremium && !downloading && (
+              <span className="relative z-10 ml-0.5 px-1.5 py-0.5 rounded-md bg-amber-100/30 text-amber-200 text-[9px] font-semibold normal-case tracking-normal border border-amber-200/30">
+                Premium
+              </span>
+            )}
           </button>
         </div>
       )}
@@ -209,14 +221,15 @@ const ProfileDetail = () => {
               <div className="inline-flex p-3 rounded-2xl bg-pink-50 text-pink-600 mb-4 mt-2">
                 <Crown size={28} />
               </div>
-              <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">Unlock Connections</h2>
-              <p className="text-gray-500 text-xs mt-1 mb-6">Upgrade your membership plan to unlock connection capabilities.</p>
+              <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">Premium Feature</h2>
+              <p className="text-gray-500 text-xs mt-1 mb-6">This feature is available exclusively for Premium Members. Upgrade your membership to download complete matrimonial biodata.</p>
 
               <div className="space-y-3 text-left bg-gray-50 p-4 rounded-xl border border-gray-100 mb-6">
                 {[
                   { icon: Eye, text: 'Reveal hidden premium images' },
                   { icon: Phone, text: 'Access telephone & social contacts' },
                   { icon: MessageCircle, text: 'Send direct match expressions' },
+                  { icon: Download, text: 'Download complete biodata PDF' },
                 ].map((item, i) => (
                   <div key={i} className="flex items-center gap-2.5 text-xs text-gray-700">
                     <item.icon size={14} className="text-pink-500" />
@@ -230,12 +243,20 @@ const ProfileDetail = () => {
                 <span className="text-gray-400 text-xs"> / month</span>
               </div>
 
-              <button
-                onClick={handleUpgrade}
-                className="w-full py-3 bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-md shadow-pink-500/10 flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Zap size={14} className="fill-current" /> Upgrade Account
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowUpgradeModal(false)}
+                  className="flex-1 py-2.5 border border-gray-200 text-gray-700 font-semibold text-sm rounded-xl hover:bg-gray-50 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpgrade}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-md shadow-pink-500/10 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Zap size={14} className="fill-current" /> Upgrade Now
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

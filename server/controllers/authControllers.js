@@ -3,6 +3,11 @@ const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 const { sendWelcomeEmail } = require('../utils/email');
 
+const safeParseJSON = (val, fallback) => {
+  if (!val) return fallback;
+  try { const p = JSON.parse(val); return Array.isArray(p) ? p : fallback; } catch { return fallback; }
+};
+
 const SALT_ROUNDS = 10;
 
 const signup = async (req, res) => {
@@ -85,7 +90,7 @@ const login = async (req, res) => {
               p.date_of_birth, p.time_of_birth, p.place_of_birth,
               p.rasi, p.nakshatra, p.laknam, p.gothram, p.dhosham,
               p.horoscope_available, p.horoscope_pdf, p.horoscope_image,
-              p.preferred_rasi, p.preferred_nakshatra, p.dhosham_preference, p.horoscope_match_required,
+               p.preferred_rasi, p.preferred_nakshatra, p.preferred_lagnam, p.preferred_dhosham, p.dhosham_preference, p.horoscope_match_required,
               p.pref_age_min, p.pref_age_max, p.pref_height,
               p.pref_education, p.pref_location, p.pref_religion,
               p.profile_photo, p.additional_photos,
@@ -174,10 +179,10 @@ const login = async (req, res) => {
         horoscopeAvailable: Boolean(user.horoscope_available),
         horoscopePdf: horoscopePdfUrl,
         horoscopeImage: horoscopeImageUrl,
-        preferredRasi: user.preferred_rasi,
-        preferredNakshatra: user.preferred_nakshatra,
-        preferredLagnam: user.preferred_lagnam,
-        preferredDhosham: user.preferred_dhosham,
+        preferredRasi: safeParseJSON(user.preferred_rasi, []),
+        preferredNakshatra: safeParseJSON(user.preferred_nakshatra, []),
+        preferredLagnam: safeParseJSON(user.preferred_lagnam, []),
+        preferredDhosham: safeParseJSON(user.preferred_dhosham, []),
         dhoshamPreference: user.dhosham_preference,
         horoscopeMatchRequired: Boolean(user.horoscope_match_required),
       },

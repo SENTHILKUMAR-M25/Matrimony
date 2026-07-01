@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  User, MapPin, Briefcase, Users, Phone, Heart, Star, FileText, CheckCircle2, ShieldCheck, Calendar
+  User, MapPin, Briefcase, Users, Phone, Heart, Star, FileText, CheckCircle2, ShieldCheck, Calendar,
+  FileDown, Loader2, Lock, X
 } from 'lucide-react';
 import API from '../../api/axios';
 import useAuthStore from '../../store/useAuthStore';
@@ -38,9 +39,11 @@ const SectionBlock = ({ icon: Icon, title, description, children }) => (
 
 const MyProfile = () => {
   const navigate = useNavigate();
-  const { token } = useAuthStore();
+  const { token, user } = useAuthStore();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -62,6 +65,38 @@ const MyProfile = () => {
     };
     fetchProfile();
   }, [token]);
+
+  const isPremium = user?.subscription_type === 'premium';
+
+  const handleDownloadBiodata = async () => {
+    if (!isPremium) {
+      setShowPremiumModal(true);
+      return;
+    }
+    setDownloading(true);
+    try {
+      const currentToken = token || localStorage.getItem('token');
+      const response = await API.get('/profile/me/biodata', {
+        headers: { Authorization: `Bearer ${currentToken}` },
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${profile.fullName || 'Profile'}_Biodata.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      if (err.response?.status === 403) {
+        setShowPremiumModal(true);
+      }
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -85,6 +120,7 @@ const MyProfile = () => {
   const primaryName = profile.fullName || `${profile.firstName} ${profile.lastName}`;
 
   return (
+    <>
     <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8 bg-gray-50/40 min-h-screen">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
@@ -139,6 +175,15 @@ const MyProfile = () => {
                 className="w-full py-3 bg-gray-900 hover:bg-gray-800 text-white font-semibold text-sm rounded-xl transition-all shadow-md active:scale-[0.99]"
               >
                 Modify Registration Particulars
+              </button>
+
+              <button
+                onClick={handleDownloadBiodata}
+                disabled={downloading}
+                className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-700 hover:to-pink-600 text-white font-semibold text-sm rounded-xl transition-all shadow-md active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {downloading ? <Loader2 size={16} className="animate-spin" /> : isPremium ? <FileDown size={16} /> : <Lock size={16} />}
+                {downloading ? 'Generating PDF\u2026' : 'Download Biodata (PDF)'}
               </button>
             </div>
           </div>
@@ -244,10 +289,10 @@ const MyProfile = () => {
           {/* Section: Partner Astrological Mandates */}
           {(profile.preferredRasi?.length > 0 || profile.preferredLagnam?.length > 0 || profile.preferredDhosham?.length > 0) && (
             <SectionBlock icon={Star} title="Target Astrological Boundaries" description="Mandatory planetary match matrices">
-              {profile.preferredRasi?.length > 0 && <DetailItem label=" Moon Signs (Rasi)" value={profile.preferredRasi.join(', ')} />}
-              {profile.preferredNakshatra?.length > 0 && <DetailItem label="Acceptable Birth Stars" value={profile.preferredNakshatra.join(', ')} />}
-              {profile.preferredLagnam?.length > 0 && <DetailItem label="Preferred Lagnam" value={profile.preferredLagnam.join(', ')} />}
-              {profile.preferredDhosham?.length > 0 && <DetailItem label="Preferred Dosham" value={profile.preferredDhosham.join(', ')} />}
+              {Array.isArray(profile.preferredRasi) && profile.preferredRasi.length > 0 && <DetailItem label=" Moon Signs (Rasi)" value={profile.preferredRasi.join(', ')} />}
+              {Array.isArray(profile.preferredNakshatra) && profile.preferredNakshatra.length > 0 && <DetailItem label="Acceptable Birth Stars" value={profile.preferredNakshatra.join(', ')} />}
+              {Array.isArray(profile.preferredLagnam) && profile.preferredLagnam.length > 0 && <DetailItem label="Preferred Lagnam" value={profile.preferredLagnam.join(', ')} />}
+              {Array.isArray(profile.preferredDhosham) && profile.preferredDhosham.length > 0 && <DetailItem label="Preferred Dosham" value={profile.preferredDhosham.join(', ')} />}
               {profile.dhoshamPreference && <DetailItem label="Dhosham Match Mandates" value={profile.dhoshamPreference} />}
               <DetailItem label="Natal Horoscope Verification" value={profile.horoscopeMatchRequired ? 'Absolute Requirement' : 'Optional Element'} />
             </SectionBlock>
@@ -256,6 +301,41 @@ const MyProfile = () => {
         </div>
       </div>
     </div>
+
+    {/* Premium Upgrade Modal */}
+    {showPremiumModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative animate-in fade-in zoom-in-95">
+          <button onClick={() => setShowPremiumModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors">
+            <X size={20} />
+          </button>
+          <div className="flex flex-col items-center text-center gap-4">
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
+              <Lock size={24} className="text-purple-600" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900">Premium Feature</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              This feature is available exclusively for Premium Members. Upgrade your membership to download your complete matrimonial biodata.
+            </p>
+            <div className="flex gap-3 w-full mt-2">
+              <button
+                onClick={() => setShowPremiumModal(false)}
+                className="flex-1 py-2.5 border border-gray-200 text-gray-700 font-semibold text-sm rounded-xl hover:bg-gray-50 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setShowPremiumModal(false); navigate('/dashboard/subscription'); }}
+                className="flex-1 py-2.5 bg-gradient-to-r from-purple-600 to-pink-500 text-white font-semibold text-sm rounded-xl hover:from-purple-700 hover:to-pink-600 transition-all shadow-md"
+              >
+                Upgrade Now
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   );
 };
 

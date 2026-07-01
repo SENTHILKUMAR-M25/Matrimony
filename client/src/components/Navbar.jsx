@@ -7,7 +7,6 @@ import logo from '../assets/logo.png';
 const navLinks = [
   { label: 'Home', href: '/', id: 'home' },
   { label: 'About', href: '#about', id: 'about' },
-  { label: 'Features', href: '#features', id: 'features' },
   { label: 'Success Stories', href: '#success-stories', id: 'success-stories' },
   { label: 'Membership Plans', href: '#membership', id: 'membership' },
   { label: 'Contact', href: '#contact', id: 'contact' },
@@ -15,22 +14,27 @@ const navLinks = [
 
 const sectionIds = ['home', 'about', 'features', 'success-stories', 'membership', 'contact'];
 
-const containerVariants = {
-  hidden: { opacity: 0 },
+const dropdownVariants = {
+  hidden: { opacity: 0, height: 0 },
   visible: {
     opacity: 1,
-    transition: { staggerChildren: 0.08, delayChildren: 0.2 },
+    height: 'auto',
+    transition: { duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] },
   },
   exit: {
     opacity: 0,
-    transition: { staggerChildren: 0.04, staggerDirection: -1 },
+    height: 0,
+    transition: { duration: 0.25, ease: 'easeIn' },
   },
 };
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 30 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
-  exit: { opacity: 0, y: -20, transition: { duration: 0.3 } },
+  hidden: { opacity: 0, x: -16 },
+  visible: (i) => ({
+    opacity: 1,
+    x: 0,
+    transition: { delay: i * 0.05, duration: 0.3, ease: 'easeOut' },
+  }),
 };
 
 const Navbar = () => {
@@ -39,6 +43,7 @@ const Navbar = () => {
   const [activeSection, setActiveSection] = useState('home');
   const location = useLocation();
   const observerRef = useRef(null);
+  const navRef = useRef(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -53,8 +58,15 @@ const Navbar = () => {
   }, [location]);
 
   useEffect(() => {
-    document.body.style.overflow = isMobileMenuOpen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
+    const handleClickOutside = (e) => {
+      if (navRef.current && !navRef.current.contains(e.target)) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+    if (isMobileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
   }, [isMobileMenuOpen]);
 
   useEffect(() => {
@@ -95,164 +107,145 @@ const Navbar = () => {
 
   const getActiveHref = useCallback(() => {
     if (location.pathname !== '/') return location.pathname;
-
     if (location.hash) return location.hash;
-
     return `#${activeSection}`;
   }, [location.pathname, location.hash, activeSection]);
 
-  const isActive = (href) => {
-    return getActiveHref() === href;
-  };
+  const isActive = (href) => getActiveHref() === href;
 
   return (
-    <>
-      <nav
-        className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 bg-white/80 backdrop-blur-xl shadow-lg`}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-20">
-            <Link to="/" className="flex items-center gap-3 group">
-              <div className="relative">
-                <img src={logo} alt="JOD Matrimony Logo" className="h-12 w-12 group-hover:scale-110 transition-transform duration-500" />
-                <motion.div
-                  className="absolute -inset-1 rounded-full bg-pink-500/20 blur-md"
-                  animate={{ scale: [1, 1.2, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                />
-              </div>
-              <span className={`hidden md:block text-2xl font-display font-bold transition-colors duration-500  'text-pink-800' `}>
-                JOD Matrimony
-              </span>
-            </Link>
-
-            <div className="hidden lg:flex items-center space-x-1">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.id}
-                  to={link.href}
-                  className={`relative px-3 py-2 text-sm font-medium transition-all text-gray-700 hover:text-pink-600 duration-300 group ${
-                    isActive(link.href)
-                      ? 'text-pink-600'
-                      : 'text-gray-700 hover:text-pink-600' }`}
-                >
-                  {link.label}
-                  <span className={`absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 bg-gradient-to-r from-pink-500 to-pink-600 transition-all duration-300 rounded-full ${
-                    isActive(link.href) ? 'w-4/5' : 'w-0 group-hover:w-4/5'
-                  }`} />
-                </Link>
-              ))}
+    <nav
+      ref={navRef}
+      className={`fixed top-0 left-0 w-full z-50 bg-white/95 backdrop-blur-xl shadow-lg transition-all duration-500 `}
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-20">
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="relative">
+              <img src={logo} alt="JOD Matrimony Logo" className="h-12 w-12 group-hover:scale-110 transition-transform duration-500" />
+              <motion.div
+                className="absolute -inset-1 rounded-full bg-pink-500/20 blur-md"
+                animate={{ scale: [1, 1.2, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              />
             </div>
+            <span className={`hidden md:block text-2xl font-display font-bold transition-colors duration-500 text-pink-800`}>
+              JOD Matrimony
+            </span>
+          </Link>
 
-            <div className="hidden lg:flex items-center space-x-4">
+          <div className="hidden lg:flex items-center space-x-1">
+            {navLinks.map((link) => (
               <Link
-                to="/signin"
-                className={`text-sm font-semibold transition-all duration-300 flex items-center text-gray-700 hover:text-pink-700 gap-1.5 `}
+                key={link.id}
+                to={link.href}
+                className={`relative px-3 py-2 text-sm font-medium transition-all duration-300 group ${
+                  isActive(link.href)
+                    ? 'text-pink-600'
+                    : 'text-gray-700 hover:text-pink-600'
+                }`}
               >
-                <LogIn size={16} />
-                Login
+                {link.label}
+                <span className={`absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 bg-gradient-to-r from-pink-500 to-pink-600 transition-all duration-300 rounded-full ${
+                  isActive(link.href) ? 'w-4/5' : 'w-0 group-hover:w-4/5'
+                }`} />
               </Link>
-              <Link
-                to="/signup"
-                className="relative inline-flex items-center gap-2 bg-gradient-to-r from-pink-500 to-pink-600 text-white px-6 py-2.5 rounded-full text-sm font-semibold overflow-hidden group transition-all duration-300 hover:shadow-lg hover:shadow-pink-500/30 hover:scale-105"
-              >
-                <Heart size={16} className="fill-white/30 group-hover:fill-white transition-colors" />
-                <span className="relative z-10">Find Your Match</span>
-                <div className="absolute inset-0 bg-gradient-to-r from-pink-600 to-pink-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              </Link>
-            </div>
-
-            <button
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="lg:hidden relative w-10 h-10 flex items-center justify-center text-white"
-              aria-label="Open menu"
-            >
-              <Menu size={24} />
-            </button>
+            ))}
           </div>
+
+          <div className="hidden lg:flex items-center space-x-4">
+            <Link
+              to="/signin"
+              className="text-sm font-semibold transition-all duration-300 flex items-center text-gray-700 hover:text-pink-700 gap-1.5"
+            >
+              <LogIn size={16} />
+              Login
+            </Link>
+            <Link
+              to="/signup"
+              className="relative inline-flex items-center gap-2 bg-gradient-to-r from-pink-500 to-pink-600 text-white px-6 py-2.5 rounded-full text-sm font-semibold overflow-hidden group transition-all duration-300 hover:shadow-lg hover:shadow-pink-500/30 hover:scale-105"
+            >
+              <Heart size={16} className="fill-white/30 group-hover:fill-white transition-colors" />
+              <span className="relative z-10">Find Your Match</span>
+              <div className="absolute inset-0 bg-gradient-to-r from-pink-600 to-pink-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            </Link>
+          </div>
+
+          <button
+            onClick={() => setIsMobileMenuOpen((p) => !p)}
+            className={`lg:hidden relative w-10 h-10 flex items-center justify-center transition-colors ${
+              isMobileMenuOpen ? 'text-pink-600' : 'text-gray-700'
+            }`}
+            aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
+          >
+            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
         </div>
-      </nav>
+      </div>
 
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="fixed inset-0 z-[100] bg-gradient-to-b from-pink-900 via-pink-800 to-maroon-900 flex flex-col"
+            variants={dropdownVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="lg:hidden overflow-hidden bg-white border-t border-gray-100 shadow-xl"
           >
-            <div className="flex justify-end p-6">
-              <button
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white transition-colors"
-                aria-label="Close menu"
-              >
-                <X size={28} />
-              </button>
-            </div>
-
-            <motion.div
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-              className="flex-1 flex flex-col items-center justify-center space-y-1 px-6"
-            >
-              {navLinks.map((link) => (
-                <motion.div key={link.id} variants={itemVariants} className="w-full max-w-xs">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 space-y-1">
+              {navLinks.map((link, i) => (
+                <motion.div
+                  key={link.id}
+                  custom={i}
+                  variants={itemVariants}
+                  initial="hidden"
+                  animate="visible"
+                >
                   <Link
                     to={link.href}
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className={`block text-center py-3.5 text-xl font-display font-semibold transition-all duration-300 rounded-lg ${
+                    className={`block py-2.5 px-4 text-sm font-medium rounded-xl transition-all duration-200 ${
                       isActive(link.href)
-                        ? 'text-pink-300 bg-white/10'
-                        : 'text-white/80 hover:text-white hover:bg-white/5'
+                        ? 'text-pink-600 bg-pink-50'
+                        : 'text-gray-600 hover:text-pink-600 hover:bg-pink-50/60'
                     }`}
                   >
                     {link.label}
                   </Link>
                 </motion.div>
               ))}
-            </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6, duration: 0.5 }}
-              className="px-6 pb-10 space-y-3"
-            >
-              <div className="flex gap-3 max-w-xs mx-auto">
+              <div className="pt-4 mt-2 border-t border-gray-100 space-y-2.5">
                 <Link
                   to="/signin"
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full border border-white/30 text-white font-semibold hover:bg-white/10 transition-all duration-300"
+                  className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 hover:border-pink-200 transition-all"
                 >
-                  <LogIn size={18} />
+                  <LogIn size={16} />
                   Login
                 </Link>
                 <Link
                   to="/signup"
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full bg-gradient-to-r from-pink-500 to-pink-600 text-white font-semibold hover:shadow-lg hover:shadow-pink-500/30 transition-all duration-300"
+                  className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-pink-600 text-white text-sm font-semibold hover:shadow-lg hover:shadow-pink-500/30 transition-all"
                 >
-                  <UserPlus size={18} />
+                  <UserPlus size={16} />
                   Register
                 </Link>
+                <Link
+                  to="/signup"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 text-white text-sm font-bold hover:shadow-lg hover:shadow-pink-500/30 transition-all"
+                >
+                  <Heart size={16} className="fill-white/60" />
+                  Find Your Match
+                </Link>
               </div>
-              <Link
-                to="/signup"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="flex items-center justify-center gap-2 py-3 rounded-full bg-white text-pink-800 font-bold hover:bg-pink-50 transition-all duration-300 max-w-xs mx-auto"
-              >
-                <Heart size={18} className="fill-pink-500 text-pink-500" />
-                Find Your Match
-              </Link>
-            </motion.div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
-    </>
+    </nav>
   );
 };
 

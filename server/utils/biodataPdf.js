@@ -1,466 +1,691 @@
-const pdfmake = require('pdfmake');
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
+const http = require('http');
+const https = require('https');
+const pdfmake = require('pdfmake');
 
-// ─── Cached Assets (loaded once at module init) ──────────────────────────────
-const FONT_DIR = path.join(__dirname, '..', 'fonts');
-const LOGO_PATH = path.join(__dirname, '..', 'assets', 'logo.png');
-const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
-
-const loadFont = (name) => {
-  const fp = path.join(FONT_DIR, name);
-  return fs.existsSync(fp) ? fp : null;
-};
-
-// Preload and cache the logo as base64 for watermark & header
-let CACHED_LOGO_BASE64 = null;
+let sharp;
 try {
-  CACHED_LOGO_BASE64 = fs.readFileSync(LOGO_PATH).toString('base64');
-} catch { /* logo not found — will render without */ }
+  sharp = require('sharp');
+} catch {
+  console.warn('[biodataPdf] sharp not installed — run npm install in server/');
+}
 
-// Preload and cache fonts
-pdfmake.addFonts({
-  Roboto: {
-    normal: loadFont('Roboto-Regular.ttf'),
-    bold: loadFont('Roboto-Medium.ttf'),
-    italics: loadFont('Roboto-Italic.ttf'),
-    bolditalics: loadFont('Roboto-MediumItalic.ttf'),
-  },
-});
-pdfmake.setLocalAccessPolicy(() => true);
-pdfmake.setUrlAccessPolicy(() => false);
+const SERVER_ROOT = path.join(__dirname, '..');
+const FONT_DIR = path.join(SERVER_ROOT, 'fonts');
+const UPLOADS_DIR = path.join(SERVER_ROOT, 'uploads');
 
-// ─── Brand Theme ──────────────────────────────────────────
-const C = {
-  primary:    '#7F55B1',
-  primaryDk:  '#5C3D82',
-  secondary:  '#9B7EBD',
-  accent:     '#F49BAB',
-  accentLt:   '#FFE1E0',
-  maroon:     '#8B1A4A',
-  maroonLt:   '#A82060',
-  bg:         '#F8F4FC',
-  bgCard:     '#FDFBFE',
-  border:     '#E4DAEE',
-  borderLt:   '#F0EAF8',
-  textDark:   '#2A1540',
-  textMed:    '#5C3D82',
-  textLight:  '#9B7EBD',
-  textMuted:  '#B4A0C8',
-  white:      '#FFFFFF',
-  gold:       '#D4A847',
-  goldLight:  '#F5D77B',
-  green:      '#10b981',
+const PHOTO_MAX_WIDTH = 420;
+const PHOTO_MAX_HEIGHT = 520;
+const PHOTO_JPEG_QUALITY = 86;
+const FETCH_TIMEOUT_MS = 12_000;
+const LOGO_MAX_BYTES = 900_000;
+
+const BRAND = {
+  name: 'JOD Matrimony',
+  tagline: 'Where Hearts Meet Forever',
+  website: 'www.jodmatrimony.com',
+  primary: '#7F55B1',
+  secondary: '#9B7EBD',
+  accent: '#F49BAB',
+  dark: '#3B1E54',
+  gold: '#B8860B',
+  muted: '#6B7280',
+  border: '#E9D5FF',
+  bg: '#FFFBFA',
 };
 
-const PW = 505; // printable width
+const REDACTED = '● Premium Only ●';
 
-// ─── Image Helpers ────────────────────────────────────────
-const SUPPORTED_IMG_SIGS = [
-  Buffer.from([0x89, 0x50, 0x4e, 0x47]),
-  Buffer.from([0xff, 0xd8, 0xff]),
+// ─── Font setup ───────────────────────────────────────────────────
+const resolveFontPath = (...names) => {
+  for (const name of names) {
+    const p = path.join(FONT_DIR, name);
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+};
+
+const initFonts = () => {
+  const normal = resolveFontPath('Roboto-Regular.ttf');
+  const bold = resolveFontPath('Roboto-Bold.ttf', 'Roboto-Medium.ttf');
+  const italics = resolveFontPath('Roboto-Italic.ttf');
+  const bolditalics = resolveFontPath('Roboto-BoldItalic.ttf', 'Roboto-MediumItalic.ttf');
+
+  if (!normal || !bold) {
+    throw new Error('Roboto fonts not found. Run: node scripts/downloadFonts.js');
+  }
+
+  pdfmake.setFonts({
+    Roboto: {
+      normal,
+      bold,
+      italics: italics || normal,
+      bolditalics: bolditalics || bold,
+    },
+  });
+
+  pdfmake.setLocalAccessPolicy(() => true);
+  pdfmake.setUrlAccessPolicy(() => false);
+};
+
+try {
+  initFonts();
+} catch (err) {
+  console.warn('[biodataPdf]', err.message);
+}
+
+// ─── Asset preloading ─────────────────────────────────────────────
+const imageCache = new Map();
+let logoDataUrl = null;
+let placeholderDataUrl = null;
+let assetsReady = false;
+
+const LOGO_CANDIDATES = [
+  path.join(SERVER_ROOT, 'assets', 'logo.png'),
+  path.join(SERVER_ROOT, '..', 'client', 'src', 'assets', 'logo.png'),
 ];
 
-const isSupportedImage = (fp) => {
-  try {
-    const fd = fs.openSync(fp, 'r');
-    const buf = Buffer.alloc(4);
-    fs.readSync(fd, buf, 0, 4, 0);
-    fs.closeSync(fd);
-    return SUPPORTED_IMG_SIGS.some((s) => buf.slice(0, s.length).equals(s));
-  } catch { return false; }
+const bufferToDataUrl = (buf, mime = 'image/jpeg') =>
+  `data:${mime};base64,${buf.toString('base64')}`;
+
+const fileToDataUrl = (filePath, maxBytes = LOGO_MAX_BYTES) => {
+  if (!filePath || !fs.existsSync(filePath)) return null;
+  const ext = path.extname(filePath).slice(1).toLowerCase().replace('jpg', 'jpeg');
+  const buf = fs.readFileSync(filePath);
+  if (buf.length > maxBytes) return null;
+  return bufferToDataUrl(buf, `image/${ext}`);
 };
 
-const getPhotoPath = (photoUrl) => {
-  if (!photoUrl) return null;
-  const uploadsDir = path.join(__dirname, '..', 'uploads');
-  let fp;
-  const m = photoUrl.split('/uploads/');
-  if (m.length > 1) fp = path.join(uploadsDir, m[1]);
-  else fp = path.join(uploadsDir, path.basename(photoUrl));
-  if (!fs.existsSync(fp)) return null;
-  return isSupportedImage(fp) ? fp : null;
+const preloadAssets = () => {
+  if (assetsReady) return;
+  for (const candidate of LOGO_CANDIDATES) {
+    logoDataUrl = fileToDataUrl(candidate);
+    if (logoDataUrl) break;
+  }
+  assetsReady = true;
+  createPlaceholderDataUrl().catch((err) => {
+    console.warn('[biodataPdf] Placeholder preload failed:', err.message);
+  });
 };
 
-// ─── Layout Helpers ───────────────────────────────────────
-const sectionCard = (title, icon, items) => ({
-  margin: [0, 0, 0, 8],
-  stack: [
-    {
-      canvas: [{ type: 'rect', x: 0, y: 0, w: PW, h: 24, r: 4, lineColor: C.border, lineWidth: 0.5, fillOpacity: 0.5, color: C.bg }],
-      absolutePosition: { x: 40, y: 0 },
-    },
-    {
-      columns: [
-        { width: 20, text: icon, fontSize: 11, color: C.primary, margin: [8, 4, 0, 0] },
-        { width: PW - 20, text: title.toUpperCase(), style: 'sectionTitle', margin: [4, 3, 0, 0] },
-      ],
-      margin: [0, 0, 0, 4],
-    },
-    {
-      canvas: [{ type: 'line', x1: 0, y1: 0, x2: PW, y2: 0, lineWidth: 1.5, lineColor: C.primary }],
-      margin: [0, 0, 0, 6],
-    },
-    ...items.filter(Boolean),
-  ],
+// ─── Profile photo loading ─────────────────────────────────────────
+const isHttpUrl = (value) => /^https?:\/\//i.test(String(value || ''));
+
+const fetchUrlBuffer = (url) => new Promise((resolve, reject) => {
+  const lib = url.startsWith('https') ? https : http;
+  const req = lib.get(url, (res) => {
+    if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+      const next = res.headers.location.startsWith('http')
+        ? res.headers.location
+        : new URL(res.headers.location, url).href;
+      fetchUrlBuffer(next).then(resolve).catch(reject);
+      return;
+    }
+    if (res.statusCode !== 200) {
+      reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+      return;
+    }
+    const chunks = [];
+    res.on('data', (chunk) => chunks.push(chunk));
+    res.on('end', () => resolve(Buffer.concat(chunks)));
+  });
+  req.on('error', reject);
+  req.setTimeout(FETCH_TIMEOUT_MS, () => req.destroy(new Error(`Timeout fetching ${url}`)));
 });
 
-const fieldRow = (label, value, hidden = false) => {
-  let val;
-  if (hidden) val = { text: 'Premium Only', style: 'hiddenVal' };
-  else if (value != null && value !== '' && value !== '—') val = { text: String(value), style: 'fieldVal' };
-  else val = { text: '—', style: 'fieldValMuted' };
+const resolveLocalPhotoPath = (urlOrPath) => {
+  if (!urlOrPath) return null;
+  const raw = String(urlOrPath).trim();
+
+  if (path.isAbsolute(raw) && fs.existsSync(raw)) return raw;
+
+  const uploadsIdx = raw.indexOf('/uploads/');
+  if (uploadsIdx !== -1) {
+    const rel = raw.slice(uploadsIdx + 1);
+    const abs = path.join(SERVER_ROOT, rel);
+    if (fs.existsSync(abs)) return abs;
+  }
+
+  if (raw.startsWith('/uploads/')) {
+    const abs = path.join(SERVER_ROOT, raw.slice(1));
+    if (fs.existsSync(abs)) return abs;
+  }
+
+  if (raw.startsWith('uploads/')) {
+    const abs = path.join(SERVER_ROOT, raw);
+    if (fs.existsSync(abs)) return abs;
+  }
+
+  const basename = path.basename(raw.split('?')[0]);
+  if (basename && basename !== raw) {
+    const abs = path.join(UPLOADS_DIR, basename);
+    if (fs.existsSync(abs)) return abs;
+  }
+
+  return null;
+};
+
+const collectPhotoSources = (profile, explicitPath) => {
+  const sources = [];
+  const add = (value) => {
+    if (!value) return;
+    const v = String(value).trim();
+    if (v && !sources.includes(v)) sources.push(v);
+  };
+
+  add(explicitPath);
+  add(profile?.profilePhotoRaw);
+  add(profile?.profilePhoto);
+
+  const expanded = [...sources];
+  for (const src of expanded) {
+    const local = resolveLocalPhotoPath(src);
+    if (local) add(local);
+  }
+
+  return sources;
+};
+
+const compressPhotoBuffer = async (buffer) => {
+  if (!buffer || !buffer.length) return null;
+
+  if (sharp) {
+    const output = await sharp(buffer)
+      .rotate()
+      .resize(PHOTO_MAX_WIDTH, PHOTO_MAX_HEIGHT, {
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: PHOTO_JPEG_QUALITY, mozjpeg: true })
+      .toBuffer();
+    return bufferToDataUrl(output, 'image/jpeg');
+  }
+
+  const header = buffer.slice(0, 12).toString('hex');
+  let mime = null;
+  if (header.startsWith('ffd8ff')) mime = 'image/jpeg';
+  else if (header.startsWith('89504e47')) mime = 'image/png';
+  else if (header.startsWith('52494646')) mime = 'image/webp';
+
+  if (!mime || mime === 'image/webp') return null;
+  return bufferToDataUrl(buffer, mime);
+};
+
+const createPlaceholderDataUrl = async () => {
+  if (placeholderDataUrl) return placeholderDataUrl;
+
+  const assetPath = path.join(SERVER_ROOT, 'assets', 'placeholder-profile.png');
+  if (fs.existsSync(assetPath)) {
+    const buf = fs.readFileSync(assetPath);
+    placeholderDataUrl = sharp
+      ? await compressPhotoBuffer(buf)
+      : fileToDataUrl(assetPath, 2_000_000);
+    if (placeholderDataUrl) return placeholderDataUrl;
+  }
+
+  if (sharp) {
+    const buf = await sharp({
+      create: {
+        width: PHOTO_MAX_WIDTH,
+        height: PHOTO_MAX_HEIGHT,
+        channels: 3,
+        background: { r: 249, g: 245, b: 255 },
+      },
+    })
+      .composite([{
+        input: Buffer.from(`
+          <svg width="${PHOTO_MAX_WIDTH}" height="${PHOTO_MAX_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+            <rect width="100%" height="100%" fill="#F9F5FF"/>
+            <circle cx="210" cy="175" r="58" fill="#E9D5FF"/>
+            <ellipse cx="210" cy="340" rx="95" ry="72" fill="#E9D5FF"/>
+            <text x="210" y="470" text-anchor="middle" font-family="Arial,sans-serif" font-size="22" fill="#9B7EBD">No Photo</text>
+          </svg>
+        `),
+        top: 0,
+        left: 0,
+      }])
+      .jpeg({ quality: 82 })
+      .toBuffer();
+    placeholderDataUrl = bufferToDataUrl(buf, 'image/jpeg');
+    return placeholderDataUrl;
+  }
+
+  placeholderDataUrl = logoDataUrl;
+  return placeholderDataUrl;
+};
+
+preloadAssets();
+
+/**
+ * Resolve profile photo to a Base64 data URL, fully loaded before PDF build.
+ * Tries local disk paths, then HTTP(S) URLs (cloud/CDN), then placeholder.
+ */
+const loadProfilePhotoDataUrl = async (profile, explicitPath) => {
+  const cacheKey = [
+    explicitPath || '',
+    profile?.profilePhotoRaw || '',
+    profile?.profilePhoto || '',
+  ].join('|');
+
+  if (imageCache.has(cacheKey)) return imageCache.get(cacheKey);
+
+  const sources = collectPhotoSources(profile, explicitPath);
+  let photoDataUrl = null;
+
+  for (const source of sources) {
+    try {
+      const localPath = resolveLocalPhotoPath(source);
+      if (localPath) {
+        const buffer = fs.readFileSync(localPath);
+        photoDataUrl = await compressPhotoBuffer(buffer);
+        if (photoDataUrl) break;
+        continue;
+      }
+
+      if (isHttpUrl(source)) {
+        const buffer = await fetchUrlBuffer(source);
+        photoDataUrl = await compressPhotoBuffer(buffer);
+        if (photoDataUrl) break;
+      }
+    } catch (err) {
+      console.warn('[biodataPdf] Photo source failed:', source, '-', err.message);
+    }
+  }
+
+  if (!photoDataUrl) {
+    photoDataUrl = await createPlaceholderDataUrl();
+  }
+
+  imageCache.set(cacheKey, photoDataUrl);
+  return photoDataUrl;
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────
+const fmt = (v) => {
+  if (v === null || v === undefined || v === '') return '—';
+  if (Array.isArray(v)) return v.length ? v.join(', ') : '—';
+  return String(v);
+};
+
+const gated = (value, isPremium) => {
+  if (isPremium) return fmt(value);
+  if (value === null || value === undefined || value === '') return '—';
+  return REDACTED;
+};
+
+const formatDate = (d) => {
+  if (!d) return '—';
+  try {
+    return new Date(d).toLocaleDateString('en-IN', {
+      day: '2-digit', month: 'short', year: 'numeric',
+    });
+  } catch {
+    return fmt(d);
+  }
+};
+
+const generationDate = () => new Date().toLocaleDateString('en-IN', {
+  day: '2-digit', month: 'long', year: 'numeric',
+});
+
+const sectionHeader = (title) => ({
+  table: {
+    widths: ['*'],
+    body: [[{
+      text: title.toUpperCase(),
+      style: 'sectionTitle',
+      fillColor: BRAND.primary,
+      color: '#FFFFFF',
+      margin: [10, 6, 10, 6],
+    }]],
+  },
+  layout: {
+    hLineWidth: () => 0,
+    vLineWidth: () => 0,
+    paddingLeft: () => 0,
+    paddingRight: () => 0,
+    paddingTop: () => 0,
+    paddingBottom: () => 0,
+  },
+  margin: [0, 14, 0, 8],
+});
+
+const fieldTable = (rows) => ({
+  table: {
+    widths: ['35%', '65%'],
+    body: rows.map(([label, value]) => [
+      { text: label, style: 'fieldLabel' },
+      { text: value, style: 'fieldValue' },
+    ]),
+  },
+  layout: {
+    hLineWidth: (i, node) => (i === 0 || i === node.table.body.length ? 0.5 : 0.3),
+    vLineWidth: () => 0,
+    hLineColor: () => BRAND.border,
+    paddingLeft: () => 8,
+    paddingRight: () => 8,
+    paddingTop: () => 5,
+    paddingBottom: () => 5,
+  },
+  margin: [0, 0, 0, 4],
+});
+
+const buildWatermark = () => {
+  if (!logoDataUrl) return null;
+  return (currentPage, pageSize) => ({
+    image: logoDataUrl,
+    width: 220,
+    opacity: 0.06,
+    absolutePosition: {
+      x: (pageSize.width - 220) / 2,
+      y: (pageSize.height - 220) / 2,
+    },
+  });
+};
+
+const buildHeader = () => {
+  const logoCell = logoDataUrl
+    ? { image: logoDataUrl, width: 52, height: 52, margin: [0, 2, 0, 0] }
+    : { text: '♥', fontSize: 36, color: BRAND.accent, alignment: 'center', margin: [0, 4, 0, 0] };
 
   return {
-    columns: [
-      { width: '38%', text: label, style: 'fieldLbl' },
-      { width: '62%', ...val },
-    ],
-    margin: [0, 1.5, 0, 1.5],
+    table: {
+      widths: [60, '*', 60],
+      body: [[
+        logoCell,
+        {
+          stack: [
+            { text: BRAND.name, style: 'brandTitle', alignment: 'center' },
+            { text: BRAND.tagline, style: 'brandTagline', alignment: 'center' },
+            {
+              canvas: [{
+                type: 'line', x1: 80, y1: 0, x2: 280, y2: 0,
+                lineWidth: 1, lineColor: BRAND.accent,
+              }],
+              margin: [0, 4, 0, 0],
+            },
+          ],
+          margin: [0, 4, 0, 0],
+        },
+        { text: 'MATRIMONIAL\nBIODATA', style: 'biodataBadge', alignment: 'right' },
+      ]],
+    },
+    layout: 'noBorders',
+    margin: [0, 0, 0, 10],
   };
 };
 
-const fieldRow2Col = (l1, v1, h1, l2, v2, h2) => ({
-  columns: [
-    { width: '50%', stack: [fieldRow(l1, v1, h1)] },
-    { width: '50%', stack: [fieldRow(l2, v2, h2)] },
-  ],
-  margin: [0, 0, 0, 0],
-});
-
-// ─── Main Generator ───────────────────────────────────────
-const generateBiodata = (profile, user, isPremium) => {
-  const hidden = !isPremium;
-  const photoPath = getPhotoPath(profile.profilePhoto);
-  const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
-
-  const prefAge = (profile.prefAgeMin || profile.prefAgeMax)
-    ? `${profile.prefAgeMin || '—'} to ${profile.prefAgeMax || '—'} yrs`
-    : '—';
-
-  const locationStr = [profile.city, profile.state, profile.country].filter(Boolean).join(', ') || '—';
-
-  // ── Photo block with premium frame ──
-  const photoBlock = photoPath
-    ? {
-        stack: [
-          { canvas: [{ type: 'rect', x: -3, y: -3, w: 101, h: 121, r: 6, lineColor: C.primary, lineWidth: 2, fillOpacity: 0 }] },
-          { image: photoPath, width: 95, height: 115, alignment: 'center', margin: [0, 0, 0, 0] },
-        ],
-        width: 95,
-        margin: [0, 0, 0, 0],
-      }
-    : {
-        stack: [
-          { canvas: [{ type: 'rect', x: -3, y: -3, w: 101, h: 121, r: 6, lineColor: C.border, lineWidth: 1, fillOpacity: 0 }] },
-          { text: 'No Photo', alignment: 'center', color: C.textMuted, fontSize: 10, margin: [0, 45, 0, 0] },
-        ],
-        width: 95,
-        margin: [0, 0, 0, 0],
-      };
-
-  // ── Build document ──
-  const docDefinition = {
-    pageSize: 'A4',
-    pageMargins: [40, 65, 40, 70],
-
-    info: {
-      title: `Biodata - ${profile.fullName || 'Profile'}`,
-      author: 'JOD Matrimony',
-      subject: 'Matrimonial Biodata',
-      creator: 'JOD Matrimony',
-    },
-
-    // ── Header (every page) ──
-    header: () => ({
-      columns: [
-        CACHED_LOGO_BASE64
-          ? { image: `data:image/png;base64,${CACHED_LOGO_BASE64}`, width: 18, height: 18, margin: [40, 8, 4, 0] }
-          : { text: '', width: 0 },
-        { text: 'JOD Matrimony', fontSize: 9, bold: true, color: C.primary, margin: [4, 9, 0, 0] },
-        { text: today, fontSize: 7.5, color: C.textMuted, alignment: 'right', margin: [0, 10, 40, 0] },
-      ],
-    }),
-
-    // ── Footer (every page) ──
-    footer: (current, total) => ({
-      margin: [40, 0, 40, 0],
-      stack: [
-        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: PW, y2: 0, lineWidth: 0.5, lineColor: C.borderLt }] },
-        {
-          columns: [
-            { text: 'JOD Matrimony \u2014 Find Your Perfect Life Partner', fontSize: 7, color: C.textMuted, margin: [0, 6, 0, 0] },
-            { text: `Page ${current} of ${total}`, fontSize: 7, color: C.textMuted, alignment: 'right', margin: [0, 6, 0, 0] },
-          ],
-        },
-        { text: 'This biodata is generated for personal matrimonial purposes. Information is subject to verification.', fontSize: 6, color: C.textMuted, alignment: 'center', margin: [0, 3, 0, 0], italics: true },
-      ],
-    }),
-
-    // ── Watermark ──
-    watermark: {
-      text: 'JOD Matrimony',
-      color: C.border,
-      opacity: 0.06,
-      bold: true,
-      fontSize: 52,
-      angle: -30,
-    },
-
-    // ── Background (logo watermark on every page) ──
-    background: CACHED_LOGO_BASE64
-      ? () => ({
-          image: `data:image/png;base64,${CACHED_LOGO_BASE64}`,
-          width: 250,
-          height: 250,
+const buildProfileHero = (profile, photoDataUrl, hasRealPhoto) => {
+  const photoFrame = {
+    table: {
+      widths: [96],
+      body: [[{
+        stack: [{
+          image: photoDataUrl,
+          width: 88,
+          height: 108,
+          fit: [88, 108],
           alignment: 'center',
-          opacity: 0.03,
-          margin: [0, 350, 0, 0],
-        })
-      : undefined,
-
-    content: [
-      // ═══════════════════════════════════════════
-      // TITLE BANNER
-      // ═══════════════════════════════════════════
-      {
-        canvas: [
-          { type: 'rect', x: 0, y: 0, w: PW, h: 60, r: 8, lineColor: C.primary, lineWidth: 1.5, fillOpacity: 0.08, color: C.primary },
-        ],
-        absolutePosition: { x: 40, y: 0 },
-      },
-      {
-        columns: [
-          {
-            width: CACHED_LOGO_BASE64 ? 40 : 0,
-            image: CACHED_LOGO_BASE64 ? `data:image/png;base64,${CACHED_LOGO_BASE64}` : undefined,
-            width: 36,
-            height: 36,
-            margin: [12, 10, 0, 0],
-          },
-          {
-            width: '*',
-            stack: [
-              { text: 'MATRIMONIAL BIODATA', style: 'docTitle', margin: [0, 6, 0, 2] },
-              { text: profile.profileId || '', style: 'docId', margin: [0, 0, 0, 0] },
-            ],
-          },
-        ],
-        margin: [0, 0, 0, 12],
-      },
-
-      // ═══════════════════════════════════════════
-      // PHOTO + NAME CARD
-      // ═══════════════════════════════════════════
-      {
-        canvas: [{ type: 'rect', x: 0, y: 0, w: PW, h: 140, r: 6, lineColor: C.border, lineWidth: 1, fillOpacity: 0.03, color: C.bg }],
-        absolutePosition: { x: 40, y: 72 },
-      },
-      {
-        columns: [
-          { width: 105, stack: [photoBlock], margin: [6, 0, 0, 0] },
-          {
-            width: '*',
-            stack: [
-              { text: profile.fullName || 'Profile', style: 'userName', margin: [0, 4, 0, 4] },
-              {
-                canvas: [{ type: 'line', x1: 0, y1: 0, x2: 120, y2: 0, lineWidth: 2, lineColor: C.accent }],
-                margin: [0, 0, 0, 6],
-              },
-              {
-                columns: [
-                  { width: '50%', stack: [
-                    { text: `${profile.age || '\u2014'} yrs`, style: 'userMeta' },
-                    { text: profile.gender || '\u2014', style: 'userMeta' },
-                  ]},
-                  { width: '50%', stack: [
-                    { text: profile.height || '\u2014', style: 'userMeta' },
-                    { text: profile.maritalStatus || '\u2014', style: 'userMeta' },
-                  ]},
-                ],
-                margin: [0, 0, 0, 4],
-              },
-              { text: locationStr, style: 'userLocation', margin: [0, 0, 0, 4] },
-              hidden
-                ? { text: 'Contact details available for premium members', style: 'hiddenNote' }
-                : {
-                    columns: [
-                      { width: '50%', stack: [
-                        profile.email ? { text: profile.email, style: 'contactInfo', margin: [0, 0, 0, 2] } : null,
-                      ].filter(Boolean) },
-                      { width: '50%', stack: [
-                        profile.mobile ? { text: profile.mobile, style: 'contactInfo' } : null,
-                      ].filter(Boolean) },
-                    ],
-                  },
-            ],
-          },
-        ],
-        margin: [6, 0, 0, 14],
-      },
-
-      // ═══════════════════════════════════════════
-      // PROFILE SUMMARY
-      // ═══════════════════════════════════════════
-      sectionCard('Profile Summary', '\u2726', [
-        {
-          columns: [
-            { width: '33%', stack: [
-              { text: 'Name', style: 'summLabel' }, { text: profile.fullName || '\u2014', style: 'summValue' },
-            ]},
-            { width: '33%', stack: [
-              { text: 'Age', style: 'summLabel' }, { text: profile.age ? `${profile.age} years` : '\u2014', style: 'summValue' },
-            ]},
-            { width: '34%', stack: [
-              { text: 'Religion', style: 'summLabel' }, { text: profile.religion || '\u2014', style: 'summValue' },
-            ]},
-          ],
-          margin: [8, 0, 8, 4],
-        },
-        {
-          columns: [
-            { width: '33%', stack: [
-              { text: 'Education', style: 'summLabel' }, { text: profile.education || '\u2014', style: 'summValue' },
-            ]},
-            { width: '33%', stack: [
-              { text: 'Occupation', style: 'summLabel' }, { text: profile.occupation || '\u2014', style: 'summValue' },
-            ]},
-            { width: '34%', stack: [
-              { text: 'Location', style: 'summLabel' }, { text: [profile.city, profile.state].filter(Boolean).join(', ') || '\u2014', style: 'summValue' },
-            ]},
-          ],
-          margin: [8, 0, 8, 4],
-        },
-      ]),
-
-      // ═══════════════════════════════════════════
-      // PERSONAL DETAILS
-      // ═══════════════════════════════════════════
-      sectionCard('Personal Details', '\u263A', [
-        { margin: [8, 0, 8, 0], stack: [
-          fieldRow2Col('Full Name', profile.fullName, false, 'Gender', profile.gender, false),
-          fieldRow2Col('Date of Birth', profile.dateOfBirth, false, 'Age', profile.age, false),
-          fieldRow2Col('Height', profile.height, false, 'Weight', profile.weight, hidden),
-          fieldRow2Col('Marital Status', profile.maritalStatus, false, 'Mother Tongue', profile.motherTongue, hidden),
-          fieldRow2Col('Religion', profile.religion, false, 'Caste', profile.caste, hidden),
-          fieldRow('Sub Caste', profile.subCaste, hidden),
-        ]},
-      ]),
-
-      // ═══════════════════════════════════════════
-      // EDUCATION & CAREER
-      // ═══════════════════════════════════════════
-      sectionCard('Education & Career', '\u2726', [
-        { margin: [8, 0, 8, 0], stack: [
-          fieldRow2Col('Education', profile.education, false, 'Occupation', profile.occupation, false),
-          fieldRow2Col('Company / Institution', profile.companyName, hidden, 'Annual Income', profile.annualIncome, hidden),
-        ]},
-      ]),
-
-      // ═══════════════════════════════════════════
-      // FAMILY DETAILS
-      // ═══════════════════════════════════════════
-      sectionCard('Family Details', '\u263A', [
-        { margin: [8, 0, 8, 0], stack: [
-          fieldRow2Col("Father's Name", profile.fatherName, hidden, "Mother's Name", profile.motherName, hidden),
-          fieldRow('Siblings', profile.siblings != null ? String(profile.siblings) : '\u2014', hidden),
-        ]},
-      ]),
-
-      // ═══════════════════════════════════════════
-      // HOROSCOPE
-      // ═══════════════════════════════════════════
-      sectionCard('Horoscope Details', '\u2605', [
-        { margin: [8, 0, 8, 0], stack: [
-          fieldRow2Col('Date of Birth', profile.dateOfBirth, false, 'Time of Birth', profile.timeOfBirth, false),
-          fieldRow2Col('Place of Birth', profile.placeOfBirth, false, 'Rasi (Moon Sign)', profile.rasi, false),
-          fieldRow2Col('Nakshatra (Star)', profile.nakshatra, false, 'Lagnam (Ascendant)', profile.laknam, false),
-          fieldRow2Col('Gothram', profile.gothram, false, 'Dhosham', profile.dhosham, false),
-          profile.horoscopeAvailable
-            ? { text: '\u2713  Horoscope Available', style: 'availTag', margin: [8, 4, 0, 2] }
-            : null,
-        ]},
-      ]),
-
-      // ═══════════════════════════════════════════
-      // PARTNER PREFERENCES
-      // ═══════════════════════════════════════════
-      sectionCard('Partner Preferences', '\u2661', [
-        { margin: [8, 0, 8, 0], stack: [
-          fieldRow2Col('Age Preference', prefAge, false, 'Height Preference', profile.prefHeight, false),
-          fieldRow2Col('Education', profile.prefEducation, false, 'Location', profile.prefLocation, false),
-          fieldRow2Col('Religion', profile.prefReligion, false, 'Horoscope Match', profile.horoscopeMatchRequired ? 'Required' : 'Not Required', false),
-          fieldRow('Preferred Rasi', Array.isArray(profile.preferredRasi) && profile.preferredRasi.length ? profile.preferredRasi.join(', ') : '\u2014', false),
-          fieldRow('Preferred Nakshatra', Array.isArray(profile.preferredNakshatra) && profile.preferredNakshatra.length ? profile.preferredNakshatra.join(', ') : '\u2014', false),
-          fieldRow('Preferred Lagnam', Array.isArray(profile.preferredLagnam) && profile.preferredLagnam.length ? profile.preferredLagnam.join(', ') : '\u2014', false),
-          fieldRow('Preferred Dhosham', Array.isArray(profile.preferredDhosham) && profile.preferredDhosham.length ? profile.preferredDhosham.join(', ') : '\u2014', false),
-        ]},
-      ]),
-
-      // ═══════════════════════════════════════════
-      // CONTACT INFORMATION
-      // ═══════════════════════════════════════════
-      sectionCard('Contact Information', '\u2709', [
-        hidden
-          ? { text: 'Contact details are available for premium members only. Upgrade to view.', style: 'hiddenNote', margin: [12, 4, 0, 4] }
-          : { margin: [8, 0, 8, 0], stack: [
-              fieldRow('Email', profile.email, false),
-              fieldRow('Mobile', profile.mobile, false),
-              fieldRow('City', profile.city, false),
-              fieldRow('State', profile.state, false),
-              fieldRow('Country', profile.country, false),
-            ]},
-      ]),
-
-      // ═══════════════════════════════════════════
-      // BRANDED FOOTER
-      // ═══════════════════════════════════════════
-      { canvas: [{ type: 'line', x1: 0, y1: 0, x2: PW, y2: 0, lineWidth: 1, lineColor: C.primary }], margin: [0, 10, 0, 6] },
-      {
-        columns: [
-          CACHED_LOGO_BASE64
-            ? { image: `data:image/png;base64,${CACHED_LOGO_BASE64}`, width: 16, height: 16, margin: [0, 0, 6, 0] }
-            : { text: '', width: 0 },
-          {
-            stack: [
-              { text: 'JOD Matrimony', fontSize: 11, bold: true, color: C.primary, margin: [0, 0, 0, 1] },
-              { text: 'Find Your Perfect Life Partner', fontSize: 7.5, color: C.textMuted, italics: true },
-            ],
-          },
-          {
-            text: `Generated on ${today}`,
-            fontSize: 7,
-            color: C.textMuted,
-            alignment: 'right',
-            margin: [0, 4, 0, 0],
-          },
-        ],
-        margin: [0, 0, 0, 4],
-      },
-    ].filter(Boolean),
-
-    styles: {
-      docTitle:      { fontSize: 18, bold: true, color: C.white },
-      docId:         { fontSize: 8.5, color: C.accent, margin: [0, 2, 0, 0] },
-      userName:      { fontSize: 17, bold: true, color: C.textDark },
-      userMeta:      { fontSize: 9.5, color: C.textMed, margin: [0, 0.5, 0, 0.5] },
-      userLocation:  { fontSize: 9, color: C.textLight },
-      contactInfo:   { fontSize: 8.5, color: C.textMed },
-      sectionTitle:  { fontSize: 10, bold: true, color: C.primary },
-      fieldLbl:      { fontSize: 8.5, bold: true, color: C.textLight },
-      fieldVal:      { fontSize: 9, color: C.textDark },
-      fieldValMuted: { fontSize: 9, color: C.textMuted },
-      hiddenVal:     { fontSize: 8, color: C.textMuted, italics: true },
-      hiddenNote:    { fontSize: 8, color: C.textMuted, italics: true },
-      summLabel:     { fontSize: 7.5, color: C.textLight, bold: true, margin: [8, 0, 0, 1] },
-      summValue:     { fontSize: 9, color: C.textDark, margin: [8, 0, 0, 3] },
-      availTag:      { fontSize: 8.5, color: C.green, bold: true },
+        }],
+        fillColor: '#FFFFFF',
+        margin: [4, 4, 4, 4],
+      }]],
     },
-
-    defaultStyle: { font: 'Roboto' },
+    layout: {
+      hLineWidth: () => 2,
+      vLineWidth: () => 2,
+      hLineColor: () => (hasRealPhoto ? BRAND.secondary : BRAND.border),
+      vLineColor: () => (hasRealPhoto ? BRAND.secondary : BRAND.border),
+    },
   };
 
-  return pdfmake.createPdf(docDefinition);
+  const outerFrame = {
+    table: {
+      widths: [104],
+      body: [[{
+        stack: [photoFrame],
+        fillColor: hasRealPhoto ? '#FDF4FF' : '#F9F5FF',
+        margin: [2, 2, 2, 2],
+      }]],
+    },
+    layout: {
+      hLineWidth: () => 1,
+      vLineWidth: () => 1,
+      hLineColor: () => BRAND.gold,
+      vLineColor: () => BRAND.gold,
+    },
+  };
+
+  const highlights = [
+    ['Age', fmt(profile.age)],
+    ['Height', fmt(profile.height)],
+    ['Religion', fmt(profile.religion)],
+    ['Marital Status', fmt(profile.maritalStatus)],
+    ['Education', fmt(profile.education)],
+    ['Occupation', fmt(profile.occupation)],
+  ];
+
+  return {
+    table: {
+      widths: [112, '*'],
+      body: [[
+        outerFrame,
+        {
+          stack: [
+            { text: profile.fullName || '—', style: 'profileName' },
+            {
+              text: profile.profileId ? `Profile ID: ${profile.profileId}` : '',
+              style: 'profileId',
+              margin: [0, 2, 0, 6],
+            },
+            {
+              table: {
+                widths: ['50%', '50%'],
+                body: highlights.map(([l, v]) => [
+                  { text: l, style: 'heroLabel' },
+                  { text: v, style: 'heroValue' },
+                ]),
+              },
+              layout: 'noBorders',
+            },
+          ],
+          margin: [10, 4, 0, 4],
+        },
+      ]],
+    },
+    layout: {
+      hLineWidth: () => 0.5,
+      vLineWidth: () => 0.5,
+      hLineColor: () => BRAND.border,
+      vLineColor: () => BRAND.border,
+    },
+    margin: [0, 0, 0, 12],
+  };
 };
 
-module.exports = { generateBiodata };
+const buildPremiumBanner = (isPremium) => {
+  if (isPremium) return null;
+  return {
+    table: {
+      widths: ['*'],
+      body: [[{
+        text: '⭐  Upgrade to Premium to unlock contact details, family info & complete biodata fields.',
+        style: 'premiumBanner',
+        fillColor: '#FFF7ED',
+        border: [true, true, true, true],
+        borderColor: [BRAND.gold, BRAND.gold, BRAND.gold, BRAND.gold],
+        margin: [8, 6, 8, 6],
+      }]],
+    },
+    layout: 'noBorders',
+    margin: [0, 0, 0, 10],
+  };
+};
+
+const buildDocDefinition = (profile, { isPremium, photoDataUrl, hasRealPhoto }) => {
+  const content = [
+    buildHeader(),
+    buildPremiumBanner(isPremium),
+    buildProfileHero(profile, photoDataUrl, hasRealPhoto),
+
+    sectionHeader('Personal Details'),
+    fieldTable([
+      ['Full Name', fmt(profile.fullName)],
+      ['Gender', gated(profile.gender, isPremium)],
+      ['Date of Birth', gated(formatDate(profile.dateOfBirth), isPremium)],
+      ['Age', fmt(profile.age)],
+      ['Height', fmt(profile.height)],
+      ['Weight', gated(profile.weight, isPremium)],
+      ['Marital Status', fmt(profile.maritalStatus)],
+      ['Religion', fmt(profile.religion)],
+      ['Caste', gated(profile.caste, isPremium)],
+      ['Sub Caste', gated(profile.subCaste, isPremium)],
+      ['Mother Tongue', gated(profile.motherTongue, isPremium)],
+    ]),
+
+    sectionHeader('Education & Career'),
+    fieldTable([
+      ['Education', fmt(profile.education)],
+      ['Occupation', fmt(profile.occupation)],
+      ['Company', gated(profile.companyName, isPremium)],
+      ['Annual Income', gated(profile.annualIncome, isPremium)],
+    ]),
+
+    sectionHeader('Family Details'),
+    fieldTable([
+      ['Father\'s Name', gated(profile.fatherName, isPremium)],
+      ['Mother\'s Name', gated(profile.motherName, isPremium)],
+      ['Siblings', gated(profile.siblings, isPremium)],
+    ]),
+
+    sectionHeader('Location'),
+    fieldTable([
+      ['City', gated(profile.city, isPremium)],
+      ['State', gated(profile.state, isPremium)],
+      ['Country', gated(profile.country, isPremium)],
+    ]),
+
+    sectionHeader('Lifestyle'),
+    fieldTable([
+      ['Marital Status', fmt(profile.maritalStatus)],
+      ['Height / Weight', `${fmt(profile.height)}${profile.weight && isPremium ? ` / ${profile.weight}` : profile.weight && !isPremium ? ` / ${REDACTED}` : ''}`],
+      ['Horoscope Available', profile.horoscopeAvailable ? 'Yes' : 'No'],
+    ]),
+
+    sectionHeader('Horoscope & Astro Details'),
+    fieldTable([
+      ['Date of Birth', gated(formatDate(profile.dateOfBirth), isPremium)],
+      ['Time of Birth', gated(profile.timeOfBirth, isPremium)],
+      ['Place of Birth', gated(profile.placeOfBirth, isPremium)],
+      ['Rasi', fmt(profile.rasi)],
+      ['Nakshatra', fmt(profile.nakshatra)],
+      ['Lagnam (Laknam)', gated(profile.laknam, isPremium)],
+      ['Dosham', fmt(profile.dhosham)],
+      ['Gothram', gated(profile.gothram, isPremium)],
+      ['Horoscope Match Required', profile.horoscopeMatchRequired ? 'Yes' : 'No'],
+    ]),
+
+    sectionHeader('Partner Preferences'),
+    fieldTable([
+      ['Preferred Age', isPremium && (profile.prefAgeMin || profile.prefAgeMax)
+        ? `${profile.prefAgeMin || '?'} – ${profile.prefAgeMax || '?'} years`
+        : gated(profile.prefAgeMin ? `${profile.prefAgeMin}-${profile.prefAgeMax}` : null, isPremium)],
+      ['Preferred Height', gated(profile.prefHeight, isPremium)],
+      ['Preferred Education', gated(profile.prefEducation, isPremium)],
+      ['Preferred Location', gated(profile.prefLocation, isPremium)],
+      ['Preferred Religion', gated(profile.prefReligion, isPremium)],
+      ['Preferred Rasi', gated(profile.preferredRasi, isPremium)],
+      ['Preferred Nakshatra', gated(profile.preferredNakshatra, isPremium)],
+      ['Preferred Lagnam', gated(profile.preferredLagnam, isPremium)],
+      ['Dosham Preference', gated(profile.dhoshamPreference, isPremium)],
+    ]),
+
+    sectionHeader('Contact Information'),
+    fieldTable([
+      ['Email', gated(profile.email, isPremium)],
+      ['Mobile', gated(profile.mobile, isPremium)],
+    ]),
+
+    sectionHeader('Additional Information'),
+    fieldTable([
+      ['Profile ID', fmt(profile.profileId)],
+      ['Profile Status', profile.profileCompleted ? 'Complete' : 'Incomplete'],
+      ['Document Type', isPremium ? 'Full Premium Biodata' : 'Basic Biodata (Limited)'],
+      ['Generated On', generationDate()],
+    ]),
+  ].filter(Boolean);
+
+  return {
+    pageSize: 'A4',
+    pageMargins: [42, 42, 42, 56],
+    defaultStyle: { font: 'Roboto', fontSize: 9.5, color: '#1F2937', lineHeight: 1.25 },
+    background: buildWatermark(),
+    footer: (currentPage, pageCount) => ({
+      columns: [
+        { text: BRAND.name, fontSize: 7.5, color: BRAND.secondary, margin: [42, 0, 0, 0] },
+        { text: `${BRAND.website}  •  Generated ${generationDate()}`, alignment: 'center', fontSize: 7.5, color: BRAND.muted },
+        { text: `Page ${currentPage} of ${pageCount}`, alignment: 'right', fontSize: 7.5, color: BRAND.muted, margin: [0, 0, 42, 0] },
+      ],
+      margin: [0, 8, 0, 0],
+    }),
+    styles: {
+      brandTitle: { fontSize: 20, bold: true, color: BRAND.dark },
+      brandTagline: { fontSize: 9, italics: true, color: BRAND.secondary, margin: [0, 2, 0, 0] },
+      biodataBadge: { fontSize: 8, bold: true, color: BRAND.primary, lineHeight: 1.3 },
+      profileName: { fontSize: 16, bold: true, color: BRAND.dark },
+      profileId: { fontSize: 9, color: BRAND.primary, bold: true },
+      heroLabel: { fontSize: 8, color: BRAND.muted, bold: true },
+      heroValue: { fontSize: 9, color: '#111827' },
+      sectionTitle: { fontSize: 9.5, bold: true, characterSpacing: 0.8 },
+      fieldLabel: { fontSize: 8.5, bold: true, color: BRAND.primary },
+      fieldValue: { fontSize: 9, color: '#374151' },
+      premiumBanner: { fontSize: 8.5, color: '#92400E', italics: true },
+    },
+    info: {
+      title: `${profile.fullName || 'Profile'} - Matrimonial Biodata`,
+      author: BRAND.name,
+      subject: 'Matrimonial Biodata',
+      keywords: 'matrimony, biodata, horoscope, JOD',
+    },
+    content,
+  };
+};
+
+/**
+ * Generate a print-ready A4 biodata PDF buffer.
+ * @param {object} profile
+ * @param {{ isPremium?: boolean, profilePhotoPath?: string }} options
+ * @returns {Promise<Buffer>}
+ */
+const generateBiodataPdf = async (profile, { isPremium = false, profilePhotoPath = null } = {}) => {
+  preloadAssets();
+
+  if (!pdfmake.fonts || !Object.keys(pdfmake.fonts).length) {
+    initFonts();
+  }
+
+  const placeholder = await createPlaceholderDataUrl();
+  let photoDataUrl = null;
+  let hasRealPhoto = false;
+
+  try {
+    const loaded = await loadProfilePhotoDataUrl(profile, profilePhotoPath);
+    if (loaded && loaded !== placeholder) {
+      photoDataUrl = loaded;
+      hasRealPhoto = true;
+    }
+  } catch (err) {
+    console.warn('[biodataPdf] Profile photo load failed:', err.message);
+  }
+
+  if (!photoDataUrl) {
+    photoDataUrl = placeholder;
+  }
+
+  const docDefinition = buildDocDefinition(profile, { isPremium, photoDataUrl, hasRealPhoto });
+  const pdfDoc = pdfmake.createPdf(docDefinition);
+  return pdfDoc.getBuffer();
+};
+
+module.exports = { generateBiodataPdf, preloadAssets, loadProfilePhotoDataUrl };

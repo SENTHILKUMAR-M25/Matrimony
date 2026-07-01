@@ -1,7 +1,14 @@
 const pool = require('../config/db');
 const path = require('path');
-const { generateBiodata } = require('../utils/biodataPdf');
 const { sendAppreciationEmail } = require('../utils/email');
+const { generateBiodataPdf, preloadAssets } = require('../utils/biodataPdf');
+
+const safeParseJSON = (val, fallback) => {
+  if (!val) return fallback;
+  try { const p = JSON.parse(val); return Array.isArray(p) ? p : fallback; } catch { return fallback; }
+};
+
+preloadAssets();
 
 // POST /api/profile/create
 const createProfile = async (req, res) => {
@@ -185,10 +192,10 @@ const createProfile = async (req, res) => {
         horoscopeAvailable: Boolean(profile.horoscope_available),
         horoscopePdf: profile.horoscope_pdf,
         horoscopeImage: profile.horoscope_image,
-        preferredRasi: profile.preferred_rasi ? JSON.parse(profile.preferred_rasi) : [],
-        preferredNakshatra: profile.preferred_nakshatra ? JSON.parse(profile.preferred_nakshatra) : [],
-        preferredLagnam: profile.preferred_lagnam ? JSON.parse(profile.preferred_lagnam) : [],
-        preferredDhosham: profile.preferred_dhosham ? JSON.parse(profile.preferred_dhosham) : [],
+        preferredRasi: safeParseJSON(profile.preferred_rasi, []),
+        preferredNakshatra: safeParseJSON(profile.preferred_nakshatra, []),
+        preferredLagnam: safeParseJSON(profile.preferred_lagnam, []),
+        preferredDhosham: safeParseJSON(profile.preferred_dhosham, []),
         dhoshamPreference: profile.dhosham_preference,
         horoscopeMatchRequired: Boolean(profile.horoscope_match_required),
         prefAgeMin: profile.pref_age_min,
@@ -254,10 +261,10 @@ const formatProfile = (row) => ({
   horoscopeAvailable: Boolean(row.horoscope_available),
   horoscopePdf: row.horoscope_pdf ? getProfileUrl(row.horoscope_pdf) : null,
   horoscopeImage: row.horoscope_image ? getProfileUrl(row.horoscope_image) : null,
-  preferredRasi: row.preferred_rasi ? JSON.parse(row.preferred_rasi) : [],
-  preferredNakshatra: row.preferred_nakshatra ? JSON.parse(row.preferred_nakshatra) : [],
-  preferredLagnam: row.preferred_lagnam ? JSON.parse(row.preferred_lagnam) : [],
-  preferredDhosham: row.preferred_dhosham ? JSON.parse(row.preferred_dhosham) : [],
+  preferredRasi: safeParseJSON(row.preferred_rasi, []),
+  preferredNakshatra: safeParseJSON(row.preferred_nakshatra, []),
+  preferredLagnam: safeParseJSON(row.preferred_lagnam, []),
+  preferredDhosham: safeParseJSON(row.preferred_dhosham, []),
   dhoshamPreference: row.dhosham_preference,
   horoscopeMatchRequired: Boolean(row.horoscope_match_required),
   prefAgeMin: row.pref_age_min,
@@ -267,6 +274,7 @@ const formatProfile = (row) => ({
   prefLocation: row.pref_location,
   prefReligion: row.pref_religion,
   profilePhoto: getProfileUrl(row.profile_photo),
+  profilePhotoRaw: row.profile_photo || null,
   additionalPhotos: row.additional_photos ? JSON.parse(row.additional_photos).map(getProfileUrl) : [],
 });
 
@@ -418,50 +426,123 @@ const getProfileById = async (req, res) => {
   }
 };
 
-// GET /api/profile/:id/biodata — Download PDF Biodata
-const downloadBiodata = async (req, res) => {
-  const viewerId = req.user.id;
-  const profileId = parseInt(req.params.id, 10);
+const fetchFullProfileRow = async (userId) => {
+  const [rows] = await pool.query(
+    `SELECT u.id, u.first_name, u.last_name, u.email, u.mobile, u.gender,
+            p.*
+     FROM users u
+     LEFT JOIN profiles p ON u.id = p.user_id
+     WHERE u.id = ? AND p.profile_completed = 1`,
+    [userId]
+  );
+  return rows.length > 0 ? rows[0] : null;
+};
+
+const buildBiodataFilename = (profile) => {
+  const id = profile.profileId || `JODM-${String(profile.id).padStart(3, '0')}`;
+  const name = (profile.fullName || 'Profile').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
+  return `${id}_${name}_Biodata.pdf`;
+};
+
+// GET /api/profile/me/biodata
+const downloadMyBiodata = async (req, res) => {
+  const userId = req.user.id;
 
   try {
-    const [rows] = await pool.query(
-      `SELECT u.id, u.first_name, u.last_name, u.email, u.mobile, u.gender,
-              p.*
-       FROM users u
-       LEFT JOIN profiles p ON u.id = p.user_id
-       WHERE u.id = ? AND p.profile_completed = 1`,
-      [profileId]
+    const [userRows] = await pool.query(
+      'SELECT subscription_type FROM users WHERE id = ?',
+      [userId]
     );
-
-    if (rows.length === 0) {
-      return res.status(404).json({ message: 'Profile not found' });
+    if (userRows.length === 0) {
+      return res.status(404).json({ message: 'User not found.' });
     }
 
-    const row = rows[0];
+    const isPremium = userRows[0].subscription_type === 'premium';
+    if (!isPremium) {
+      return res.status(403).json({
+        message: 'This feature is available exclusively for Premium Members. Upgrade your membership to download your complete matrimonial biodata.',
+      });
+    }
+
+    const row = await fetchFullProfileRow(userId);
+    if (!row) {
+      return res.status(404).json({ message: 'Complete your profile before downloading biodata.' });
+    }
+
+    const profile = formatProfile(row);
+    const pdfBuffer = await generateBiodataPdf(profile, {
+      isPremium: true,
+      profilePhotoPath: row.profile_photo,
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${buildBiodataFilename(profile)}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    return res.send(pdfBuffer);
+  } catch (error) {
+    console.error('--- DOWNLOAD MY BIODATA ERROR ---');
+    console.error('Message:', error.message);
+    console.error('Stack:', error.stack);
+    return res.status(500).json({ message: 'Failed to generate biodata PDF.' });
+  }
+};
+
+// GET /api/profile/:id/biodata
+const downloadBiodata = async (req, res) => {
+  const viewerId = req.user.id;
+  const targetId = parseInt(req.params.id, 10);
+
+  if (Number.isNaN(targetId)) {
+    return res.status(400).json({ message: 'Invalid profile ID.' });
+  }
+
+  if (viewerId === targetId) {
+    return downloadMyBiodata(req, res);
+  }
+
+  try {
+    const row = await fetchFullProfileRow(targetId);
+    if (!row) {
+      return res.status(404).json({ message: 'Profile not found.' });
+    }
+
     const [viewerRows] = await pool.query(
       'SELECT subscription_type FROM users WHERE id = ?',
       [viewerId]
     );
-    const viewer = viewerRows[0];
-    const isOwnProfile = viewerId === profileId;
-    const isPremium = isOwnProfile || viewer?.subscription_type === 'premium';
+    if (viewerRows.length === 0) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    const isPremium = viewerRows[0].subscription_type === 'premium';
+    if (!isPremium) {
+      return res.status(403).json({
+        message: 'This feature is available exclusively for Premium Members. Upgrade your membership to download your complete matrimonial biodata.',
+      });
+    }
 
     const profile = formatProfile(row);
+    const pdfBuffer = await generateBiodataPdf(profile, {
+      isPremium,
+      profilePhotoPath: row.profile_photo,
+    });
 
-    const pdfDoc = generateBiodata(profile, row, isPremium);
-    const buffer = await pdfDoc.getBuffer();
-
-    const filename = `Biodata_${(profile.fullName || 'Profile').replace(/\s+/g, '_')}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Length', buffer.length);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-
-    res.end(buffer);
+    res.setHeader('Content-Disposition', `attachment; filename="${buildBiodataFilename(profile)}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    return res.send(pdfBuffer);
   } catch (error) {
-    console.error('--- BIODATA PDF ERROR ---', error.message);
-    console.error(error.stack);
-    return res.status(500).json({ message: 'Failed to generate biodata.', error: error.message });
+    console.error('--- DOWNLOAD BIODATA ERROR ---');
+    console.error('Message:', error.message);
+    console.error('Stack:', error.stack);
+    return res.status(500).json({ message: 'Failed to generate biodata PDF.' });
   }
 };
 
-module.exports = { createProfile, getProfile, getProfileById, downloadBiodata };
+module.exports = {
+  createProfile,
+  getProfile,
+  getProfileById,
+  downloadMyBiodata,
+  downloadBiodata,
+};

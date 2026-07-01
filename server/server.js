@@ -15,8 +15,11 @@ const communityRoutes = require('./routes/communityRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const successStoryRoutes = require('./routes/successStoryRoutes');
 const landingRoutes = require('./routes/landingRoutes');
+const { preloadAssets } = require('./utils/biodataPdf');
 
 const app = express();
+
+preloadAssets();
 
 app.use(cors());
 app.use(express.json());

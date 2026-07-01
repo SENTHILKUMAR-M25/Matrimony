@@ -277,10 +277,10 @@ const AstroPage = ({ profile }) => (
 const PartnerPrefsPage = ({ profile }) => (
   <div className="h-full px-3 sm:px-6 md:px-8 py-3 sm:py-6 md:py-8 overflow-y-auto">
     <PageHeader icon={Heart} title="Partner Preferences" pageNum={4} totalPages={7} />
-    {profile.preferredRasi?.length > 0 && <DetailRow label="Preferred Rasi" value={profile.preferredRasi.join(', ')} />}
-    {profile.preferredNakshatra?.length > 0 && <DetailRow label="Preferred Nakshatra" value={profile.preferredNakshatra.join(', ')} />}
-    {profile.preferredLagnam?.length > 0 && <DetailRow label="Preferred Lagnam" value={profile.preferredLagnam.join(', ')} />}
-    {profile.preferredDhosham?.length > 0 && <DetailRow label="Preferred Dosham" value={profile.preferredDhosham.join(', ')} />}
+    {Array.isArray(profile.preferredRasi) && profile.preferredRasi.length > 0 && <DetailRow label="Preferred Rasi" value={profile.preferredRasi.join(', ')} />}
+    {Array.isArray(profile.preferredNakshatra) && profile.preferredNakshatra.length > 0 && <DetailRow label="Preferred Nakshatra" value={profile.preferredNakshatra.join(', ')} />}
+    {Array.isArray(profile.preferredLagnam) && profile.preferredLagnam.length > 0 && <DetailRow label="Preferred Lagnam" value={profile.preferredLagnam.join(', ')} />}
+    {Array.isArray(profile.preferredDhosham) && profile.preferredDhosham.length > 0 && <DetailRow label="Preferred Dosham" value={profile.preferredDhosham.join(', ')} />}
     <DetailRow label="Horoscope Match Required" value={profile.horoscopeMatchRequired ? 'Yes' : 'No'} />
   </div>
 );

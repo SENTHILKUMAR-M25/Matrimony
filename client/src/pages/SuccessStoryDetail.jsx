@@ -94,7 +94,7 @@ const SuccessStoryDetail = () => {
           <ChevronLeft size={16} /> Back
         </button>
 
-        <div className="relative rounded-2xl overflow-hidden h-72 sm:h-96 mb-8">
+        <div className="relative rounded-2xl overflow-hidden h-72 mt-10 sm:h-96 mb-8">
           {story.couplePhoto ? (
             <img src={`http://localhost:5000/uploads/${story.couplePhoto}`} alt={`${story.groomName} & ${story.brideName}`}
               className="w-full h-full object-cover" />

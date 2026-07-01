@@ -5,7 +5,13 @@ const path = require('path');
 const fs = require('fs');
 
 const authMiddleware = require('../middleware/auth');
-const { createProfile, getProfile, getProfileById, downloadBiodata } = require('../controllers/profileController');
+const {
+  createProfile,
+  getProfile,
+  getProfileById,
+  downloadMyBiodata,
+  downloadBiodata,
+} = require('../controllers/profileController');
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -25,6 +31,13 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
+  if (file.fieldname === 'horoscopePdf') {
+    const allowed = /pdf/;
+    const ext = allowed.test(path.extname(file.originalname).toLowerCase());
+    const mime = /application\/pdf/.test(file.mimetype);
+    if (ext && mime) return cb(null, true);
+    return cb(new Error('Only PDF files are allowed for horoscope'));
+  }
   const allowed = /jpeg|jpg|png|webp/;
   const ext = allowed.test(path.extname(file.originalname).toLowerCase());
   const mime = allowed.test(file.mimetype);
@@ -44,12 +57,15 @@ const upload = multer({
 const uploadFields = upload.fields([
   { name: 'profilePhoto', maxCount: 1 },
   { name: 'additionalPhotos', maxCount: 5 },
+  { name: 'horoscopePdf', maxCount: 1 },
+  { name: 'horoscopeImage', maxCount: 1 },
 ]);
 
-// Routes
+// Routes (specific paths before /:id)
+router.get('/me/biodata', authMiddleware, downloadMyBiodata);
 router.post('/create', authMiddleware, uploadFields, createProfile);
 router.get('/me', authMiddleware, getProfile);
-router.get('/:id', authMiddleware, getProfileById);
 router.get('/:id/biodata', authMiddleware, downloadBiodata);
+router.get('/:id', authMiddleware, getProfileById);
 
 module.exports = router;
