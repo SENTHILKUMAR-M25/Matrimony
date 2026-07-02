@@ -317,6 +317,52 @@ const buildAppreciationEmail = (firstName) => emailLayout(`
   </p>
 `);
 
+// ═══════════════════════════════════════════════════
+// PASSWORD RESET EMAIL
+// ═══════════════════════════════════════════════════
+const buildPasswordResetEmail = (firstName, resetUrl, expiryMinutes) => emailLayout(`
+  <p style="margin:0 0 6px;font-size:14px;color:${BRAND.textMuted};text-transform:uppercase;letter-spacing:1.5px;">Password Reset Request</p>
+  <h2 style="margin:0 0 16px;font-size:24px;font-weight:700;color:${BRAND.textDark};line-height:1.3;">Hello ${firstName},</h2>
+  <p style="margin:0 0 16px;font-size:15px;color:${BRAND.textMedium};line-height:1.7;">
+    We received a request to reset the password for your <strong>${BRAND.name}</strong> account.
+    Click the button below to set a new password.
+  </p>
+
+  ${ctaButton('Reset Password', resetUrl)}
+
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:${BRAND.bgLight};border-radius:8px;padding:16px 20px;margin:16px 0;">
+    <tr>
+      <td style="padding:0;">
+        <p style="margin:0;font-size:13px;color:${BRAND.textMedium};line-height:1.6;">
+          <strong style="color:${BRAND.textDark};">Link expires in:</strong> ${expiryMinutes} minutes<br>
+          <strong style="color:${BRAND.textDark};">Note:</strong> This link can only be used once.
+        </p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="margin:0 0 16px;font-size:14px;color:${BRAND.textMedium};line-height:1.7;">
+    If you didn't request a password reset, please ignore this email or
+    <a href="mailto:${BRAND.supportEmail}" style="color:${BRAND.primary};text-decoration:none;font-weight:600;">contact support</a>
+    if you have any concerns.
+  </p>
+
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 0;border-left:3px solid ${BRAND.primary};padding-left:16px;">
+    <tr>
+      <td style="padding:0;">
+        <p style="margin:0;font-size:13px;color:${BRAND.textMuted};line-height:1.5;">
+          For security reasons, never share this link with anyone. Our team will never ask for your password.
+        </p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="margin:20px 0 0;font-size:14px;color:${BRAND.textMedium};line-height:1.7;">
+    Warm regards,<br>
+    <strong style="color:${BRAND.primary};">${BRAND.name} Team</strong>
+  </p>
+`);
+
 module.exports = {
   sendWelcomeEmail: async (email, firstName) => {
     await sendEmail({
@@ -331,6 +377,14 @@ module.exports = {
       to: email,
       subject: `Congratulations ${firstName}! Your ${BRAND.name} Profile is Live`,
       html: buildAppreciationEmail(firstName),
+    });
+  },
+
+  sendPasswordResetEmail: async (email, firstName, resetUrl, expiryMinutes) => {
+    await sendEmail({
+      to: email,
+      subject: `Reset Your ${BRAND.name} Password`,
+      html: buildPasswordResetEmail(firstName, resetUrl, expiryMinutes),
     });
   },
 };

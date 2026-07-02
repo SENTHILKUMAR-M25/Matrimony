@@ -8,12 +8,54 @@ const safeParseJSON = (val, fallback) => {
   try { const p = JSON.parse(val); return Array.isArray(p) ? p : fallback; } catch { return fallback; }
 };
 
+const safeParseJSONObject = (val, fallback = null) => {
+  if (!val) return fallback;
+  try {
+    const p = typeof val === 'string' ? JSON.parse(val) : val;
+    return p && typeof p === 'object' && !Array.isArray(p) ? p : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const applyHoroscopePayload = (body) => {
+  const result = { ...body };
+  const raw = body.horoscopeData;
+  if (!raw) return { ...result, horoscopeDataJson: null };
+
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    result.horoscopeDataJson = JSON.stringify(parsed);
+
+    if (parsed.birthDetails) {
+      result.dateOfBirth = parsed.birthDetails.dateOfBirth || body.dateOfBirth;
+      result.timeOfBirth = parsed.birthDetails.timeOfBirth || body.timeOfBirth;
+      result.placeOfBirth = parsed.birthDetails.placeOfBirth || body.placeOfBirth;
+    }
+    if (parsed.fields) {
+      result.rasi = parsed.fields.rasi || body.rasi;
+      result.nakshatra = parsed.fields.nakshatra || body.nakshatra;
+      result.laknam = parsed.fields.lagnam || body.laknam;
+      result.gothram = parsed.fields.gothram || body.gothram;
+      result.dhosham = parsed.fields.dosham || body.dhosham;
+    }
+    if (parsed.saved) {
+      result.horoscopeAvailable = true;
+    }
+  } catch {
+    result.horoscopeDataJson = null;
+  }
+
+  return result;
+};
+
 preloadAssets();
 
 // POST /api/profile/create
 const createProfile = async (req, res) => {
   const userId = req.user.id;
 
+  const payload = applyHoroscopePayload(req.body);
   const {
     fullName, age, height, weight,
     maritalStatus, religion, caste, subCaste, motherTongue,
@@ -25,13 +67,12 @@ const createProfile = async (req, res) => {
     horoscopeAvailable,
     preferredRasi, preferredNakshatra, preferredLagnam, preferredDhosham, dhoshamPreference, horoscopeMatchRequired,
     prefAgeMin, prefAgeMax, prefHeight, prefEducation, prefLocation, prefReligion,
-  } = req.body;
+  } = payload;
+  const horoscopeDataJson = payload.horoscopeDataJson;
 
   // Handle uploaded photos
   let profilePhotoPath = null;
   let additionalPhotosPaths = [];
-  let horoscopePdfPath = null;
-  let horoscopeImagePath = null;
 
   if (req.files) {
     if (req.files['profilePhoto'] && req.files['profilePhoto'][0]) {
@@ -41,12 +82,6 @@ const createProfile = async (req, res) => {
       additionalPhotosPaths = req.files['additionalPhotos'].map(
         (f) => '/uploads/' + f.filename
       );
-    }
-    if (req.files['horoscopePdf'] && req.files['horoscopePdf'][0]) {
-      horoscopePdfPath = '/uploads/' + req.files['horoscopePdf'][0].filename;
-    }
-    if (req.files['horoscopeImage'] && req.files['horoscopeImage'][0]) {
-      horoscopeImagePath = '/uploads/' + req.files['horoscopeImage'][0].filename;
     }
   }
 
@@ -69,10 +104,9 @@ const createProfile = async (req, res) => {
           date_of_birth=?, time_of_birth=?, place_of_birth=?,
           rasi=?, nakshatra=?, laknam=?, gothram=?, dhosham=?,
           horoscope_available=?,
-          horoscope_pdf=COALESCE(?, horoscope_pdf),
-          horoscope_image=COALESCE(?, horoscope_image),
           preferred_rasi=?, preferred_nakshatra=?, preferred_lagnam=?, preferred_dhosham=?, dhosham_preference=?, horoscope_match_required=?,
           pref_age_min=?, pref_age_max=?, pref_height=?, pref_education=?, pref_location=?, pref_religion=?,
+          horoscope_data=?,
           profile_photo=COALESCE(?, profile_photo),
           additional_photos=COALESCE(?, additional_photos),
           profile_completed=1
@@ -86,8 +120,6 @@ const createProfile = async (req, res) => {
           dateOfBirth || null, timeOfBirth || null, placeOfBirth || null,
           rasi || null, nakshatra || null, laknam || null, gothram || null, dhosham || null,
           horoscopeAvailable === 'true' || horoscopeAvailable === true ? 1 : 0,
-          horoscopePdfPath,
-          horoscopeImagePath,
           preferredRasi ? (Array.isArray(preferredRasi) ? JSON.stringify(preferredRasi) : preferredRasi) : null,
           preferredNakshatra ? (Array.isArray(preferredNakshatra) ? JSON.stringify(preferredNakshatra) : preferredNakshatra) : null,
           preferredLagnam ? (Array.isArray(preferredLagnam) ? JSON.stringify(preferredLagnam) : preferredLagnam) : null,
@@ -95,6 +127,7 @@ const createProfile = async (req, res) => {
           dhoshamPreference || null,
           horoscopeMatchRequired === 'true' || horoscopeMatchRequired === true ? 1 : 0,
           prefAgeMin || null, prefAgeMax || null, prefHeight, prefEducation, prefLocation, prefReligion,
+          horoscopeDataJson,
           profilePhotoPath,
           additionalPhotosPaths.length > 0 ? JSON.stringify(additionalPhotosPaths) : null,
           userId,
@@ -112,11 +145,12 @@ const createProfile = async (req, res) => {
           country, state, city,
           date_of_birth, time_of_birth, place_of_birth,
           rasi, nakshatra, laknam, gothram, dhosham,
-          horoscope_available, horoscope_pdf, horoscope_image,
+          horoscope_available,
           preferred_rasi, preferred_nakshatra, preferred_lagnam, preferred_dhosham, dhosham_preference, horoscope_match_required,
           pref_age_min, pref_age_max, pref_height, pref_education, pref_location, pref_religion,
+          horoscope_data,
           profile_photo, additional_photos, profile_completed
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`,
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`,
         [
           userId,
           fullName, age || null, height, weight,
@@ -127,8 +161,6 @@ const createProfile = async (req, res) => {
           dateOfBirth || null, timeOfBirth || null, placeOfBirth || null,
           rasi || null, nakshatra || null, laknam || null, gothram || null, dhosham || null,
           horoscopeAvailable === 'true' || horoscopeAvailable === true ? 1 : 0,
-          horoscopePdfPath,
-          horoscopeImagePath,
           preferredRasi ? (Array.isArray(preferredRasi) ? JSON.stringify(preferredRasi) : preferredRasi) : null,
           preferredNakshatra ? (Array.isArray(preferredNakshatra) ? JSON.stringify(preferredNakshatra) : preferredNakshatra) : null,
           preferredLagnam ? (Array.isArray(preferredLagnam) ? JSON.stringify(preferredLagnam) : preferredLagnam) : null,
@@ -136,6 +168,7 @@ const createProfile = async (req, res) => {
           dhoshamPreference || null,
           horoscopeMatchRequired === 'true' || horoscopeMatchRequired === true ? 1 : 0,
           prefAgeMin || null, prefAgeMax || null, prefHeight, prefEducation, prefLocation, prefReligion,
+          horoscopeDataJson,
           profilePhotoPath,
           additionalPhotosPaths.length > 0 ? JSON.stringify(additionalPhotosPaths) : null,
         ]
@@ -190,8 +223,6 @@ const createProfile = async (req, res) => {
         gothram: profile.gothram,
         dhosham: profile.dhosham,
         horoscopeAvailable: Boolean(profile.horoscope_available),
-        horoscopePdf: profile.horoscope_pdf,
-        horoscopeImage: profile.horoscope_image,
         preferredRasi: safeParseJSON(profile.preferred_rasi, []),
         preferredNakshatra: safeParseJSON(profile.preferred_nakshatra, []),
         preferredLagnam: safeParseJSON(profile.preferred_lagnam, []),
@@ -206,6 +237,7 @@ const createProfile = async (req, res) => {
         prefReligion: profile.pref_religion,
         profilePhoto: profile.profile_photo,
         additionalPhotos: profile.additional_photos ? JSON.parse(profile.additional_photos) : [],
+        horoscopeData: safeParseJSONObject(profile.horoscope_data),
         profileCompleted: Boolean(profile.profile_completed),
       },
     });
@@ -259,8 +291,6 @@ const formatProfile = (row) => ({
   gothram: row.gothram,
   dhosham: row.dhosham,
   horoscopeAvailable: Boolean(row.horoscope_available),
-  horoscopePdf: row.horoscope_pdf ? getProfileUrl(row.horoscope_pdf) : null,
-  horoscopeImage: row.horoscope_image ? getProfileUrl(row.horoscope_image) : null,
   preferredRasi: safeParseJSON(row.preferred_rasi, []),
   preferredNakshatra: safeParseJSON(row.preferred_nakshatra, []),
   preferredLagnam: safeParseJSON(row.preferred_lagnam, []),
@@ -275,6 +305,7 @@ const formatProfile = (row) => ({
   prefReligion: row.pref_religion,
   profilePhoto: getProfileUrl(row.profile_photo),
   profilePhotoRaw: row.profile_photo || null,
+  horoscopeData: safeParseJSONObject(row.horoscope_data),
   additionalPhotos: row.additional_photos ? JSON.parse(row.additional_photos).map(getProfileUrl) : [],
 });
 

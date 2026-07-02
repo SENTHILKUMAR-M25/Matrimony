@@ -2,9 +2,10 @@ import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   ChevronRight, User, Sparkles, Briefcase, Phone, Heart,
-  Star, MapPin, UsersRound, ArrowLeft, Eye, FileText
+  Star, MapPin, UsersRound, ArrowLeft
 } from 'lucide-react';
 import logo from '../assets/logo.png';
+import HoroscopeDisplay from './horoscope/HoroscopeDisplay';
 
 const COLORS = {
   primary: '#7F55B1',
@@ -243,32 +244,23 @@ const BasicInfoPage = ({ profile }) => (
 const AstroPage = ({ profile }) => (
   <div className="h-full px-3 sm:px-6 md:px-8 py-3 sm:py-6 md:py-8 overflow-y-auto">
     <PageHeader icon={Sparkles} title="Horoscope & Astro" pageNum={5} totalPages={7} />
-    <div className="space-y-0.5">
-      <DetailRow label="Date of Birth" value={profile.dateOfBirth} />
-      <DetailRow label="Time of Birth" value={profile.timeOfBirth} />
-      <DetailRow label="Place of Birth" value={profile.placeOfBirth} />
-      <div className="border-b border-[#9B7EBD]/10 my-1.5 sm:my-3" />
-      <DetailRow label="Rasi" value={profile.rasi} />
-      <DetailRow label="Nakshatra" value={profile.nakshatra} />
-      <DetailRow label="Laknam" value={profile.laknam} />
-      <DetailRow label="Gothram" value={profile.gothram} />
-      <DetailRow label="Dhosham" value={profile.dhosham} />
-    </div>
-    {profile.horoscopeAvailable && (
-      <div className="mt-2 sm:mt-5 pt-2 sm:pt-4 border-t border-[#9B7EBD]/10 flex flex-wrap gap-2 sm:gap-3">
-        {profile.horoscopePdf && (
-          <a href={profile.horoscopePdf} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-semibold text-[#7F55B1] hover:text-[#9B7EBD] transition-colors active:scale-95">
-            <FileText size={10} className="sm:w-[11px] sm:h-[11px]" /> View Horoscope PDF
-          </a>
-        )}
-        {profile.horoscopeImage && (
-          <a href={profile.horoscopeImage} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-semibold text-[#7F55B1] hover:text-[#9B7EBD] transition-colors active:scale-95">
-            <Eye size={10} className="sm:w-[11px] sm:h-[11px]" /> View Horoscope Image
-          </a>
-        )}
-      </div>
+    {profile.horoscopeData ? (
+      <HoroscopeDisplay horoscopeData={profile.horoscopeData} compact />
+    ) : (
+      <>
+        <div className="space-y-0.5">
+          <DetailRow label="Date of Birth" value={profile.dateOfBirth} />
+          <DetailRow label="Time of Birth" value={profile.timeOfBirth} />
+          <DetailRow label="Place of Birth" value={profile.placeOfBirth} />
+          <div className="border-b border-[#9B7EBD]/10 my-1.5 sm:my-3" />
+          <DetailRow label="Rasi" value={profile.rasi} />
+          <DetailRow label="Nakshatra" value={profile.nakshatra} />
+          <DetailRow label="Laknam" value={profile.laknam} />
+          <DetailRow label="Gothram" value={profile.gothram} />
+          <DetailRow label="Dhosham" value={profile.dhosham} />
+        </div>
+
+      </>
     )}
   </div>
 );

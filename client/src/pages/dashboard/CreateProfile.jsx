@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
 import API from '../../api/axios';
+import HoroscopeModule from '../../components/horoscope/HoroscopeModule';
+import { parseHoroscopeData } from '../../constants/horoscope';
 
 // ─── Static options ───
 const MARITAL_STATUS_OPTIONS = ['Never Married', 'Divorced', 'Widowed', 'Awaiting Divorce'];
@@ -710,14 +712,10 @@ const CreateProfile = () => {
   const [isDraggingProfile, setIsDraggingProfile] = useState(false);
   const [isDraggingAdditional, setIsDraggingAdditional] = useState(false);
 
-  // Horoscope states
-  const [horoscopeAvailable, setHoroscopeAvailable] = useState(
-    user?.horoscopeAvailable === true || user?.horoscopeAvailable === 'true' ? 'true' : 'false'
+  // Horoscope structured data
+  const [horoscopeData, setHoroscopeData] = useState(() =>
+    parseHoroscopeData(user?.horoscopeData)
   );
-  const [horoscopePdf, setHoroscopePdf] = useState(null);
-  const [horoscopePdfPreview, setHoroscopePdfPreview] = useState('');
-  const [horoscopeImage, setHoroscopeImage] = useState(null);
-  const [horoscopeImagePreview, setHoroscopeImagePreview] = useState('');
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm({
     defaultValues: {
@@ -809,7 +807,9 @@ const CreateProfile = () => {
     personal: isFilled(0) && isFilled(1) && isFilled(2) && isFilled(3) && isFilled(4) && isFilled(5),
     education: isFilled(6) && isFilled(7),
     location: isFilled(8) && isFilled(9) && isFilled(10) && isFilled(11),
-    astro: isHindu ? isFilled(14) && isFilled(15) : true,
+    astro: isHindu
+      ? !!(horoscopeData?.fields?.rasi && horoscopeData?.fields?.nakshatra && horoscopeData?.saved)
+      : true,
     preferences: isFilled(12) && isFilled(13),
     photos: !!profilePhotoPreview,
   };
@@ -880,24 +880,11 @@ const CreateProfile = () => {
     setAdditionalPhotosPreview(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleHoroscopePdfChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > MAX_FILE_SIZE) { alert('File must be under 5MB.'); return; }
-    setHoroscopePdf(file);
-    setHoroscopePdfPreview(file.name);
+  const syncHoroscopeToForm = (fields) => {
+    Object.entries(fields).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== '') setValue(key, val);
+    });
   };
-
-  const handleHoroscopeImageChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > MAX_FILE_SIZE) { alert('File must be under 5MB.'); return; }
-    setHoroscopeImage(file);
-    setHoroscopeImagePreview(URL.createObjectURL(file));
-  };
-
-  const removeHoroscopePdf = () => { setHoroscopePdf(null); setHoroscopePdfPreview(''); };
-  const removeHoroscopeImage = () => { setHoroscopeImage(null); setHoroscopeImagePreview(''); };
 
   const onSubmit = async (data) => {
     if (!profilePhotoPreview && !profilePhoto) {
@@ -920,23 +907,14 @@ const CreateProfile = () => {
           }
         }
       });
-      formData.append('horoscopeAvailable', horoscopeAvailable);
-
-      // Append photo files
+      formData.append('horoscopeData', JSON.stringify(horoscopeData));
+      formData.append('horoscopeAvailable', horoscopeData?.saved ? 'true' : 'false');
       if (profilePhoto) {
         formData.append('profilePhoto', profilePhoto);
       }
       additionalPhotos.forEach((file) => {
         formData.append('additionalPhotos', file);
       });
-
-      // Append horoscope files
-      if (horoscopePdf) {
-        formData.append('horoscopePdf', horoscopePdf);
-      }
-      if (horoscopeImage) {
-        formData.append('horoscopeImage', horoscopeImage);
-      }
 
       const response = await API.post('/profile/create', formData, {
         headers: {
@@ -1119,164 +1097,21 @@ const CreateProfile = () => {
           </div>
         </SectionCard>
 
-        {/* Astro Details */}
+        {/* Traditional South Indian Horoscope */}
         {(watchedFields[4] && watchedFields[4].toString().toLowerCase() === 'hindu') ? (
-          <SectionCard id="astro" title="Astro Details" icon={Star} complete={completion.astro}>
-            <div className="space-y-8">
-              {/* Birth Information */}
-              <div>
-                <h4 className="text-sm font-semibold text-pink-700 uppercase tracking-wider mb-4">Birth Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <InputField label="Date of Birth" name="dateOfBirth" type="date" icon={Calendar} register={register} errors={errors} rules={{ required: 'Required' }} />
-                  <InputField label="Time of Birth" name="timeOfBirth" type="time" icon={Clock} register={register} errors={errors} rules={{ required: 'Required' }} />
-                  <InputField label="Place of Birth" name="placeOfBirth" icon={MapPin} register={register} errors={errors} rules={{ required: 'Required' }} />
-                </div>
-              </div>
-
-              {/* Horoscope Details */}
-              <div>
-                <h4 className="text-sm font-semibold text-pink-700 uppercase tracking-wider mb-4">Horoscope Details</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <SearchableSelect
-                    label="Rasi"
-                    icon={Star}
-                    value={watch('rasi')}
-                    onChange={(v) => { setValue('rasi', v); setValue('nakshatra', ''); }}
-                    options={RASI_OPTIONS}
-                    error={errors.rasi?.message}
-                  />
-                  <DependentSelectField
-                    label="Nakshatra / Star"
-                    icon={Star}
-                    value={watch('nakshatra')}
-                    onChange={(v) => setValue('nakshatra', v)}
-                    options={getNakshatras(watch('rasi'))}
-                    parentValue={watch('rasi')}
-                    error={errors.nakshatra?.message}
-                  />
-                  <SearchableSelect
-                    label="Lagnam"
-                    icon={Star}
-                    value={watch('laknam')}
-                    onChange={(v) => setValue('laknam', v)}
-                    options={LAKNAM_OPTIONS}
-                  />
-                  <SelectField label="Gothram" name="gothram" icon={Users} register={register} errors={errors} options={GOTHRAM_OPTIONS} />
-                  <SelectField label="Dhosham" name="dhosham" icon={Star} register={register} errors={errors} options={DHOSHAM_OPTIONS} />
-                </div>
-              </div>
-
-              {/* Horoscope Upload */}
-              <div>
-                <h4 className="text-sm font-semibold text-pink-700 uppercase tracking-wider mb-4">Horoscope Upload</h4>
-                
-                {/* Toggle */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-black mb-3">Do you have a horoscope?</label>
-                  <div className="flex gap-3">
-                    {['true', 'false'].map((val) => (
-                      <button
-                        key={val}
-                        type="button"
-                        onClick={() => setHoroscopeAvailable(val)}
-                        className={`relative flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 border ${
-                          horoscopeAvailable === val
-                            ? 'bg-pink-600 text-white border-pink-600 shadow-lg shadow-pink-600/20'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-pink-300 hover:text-pink-700'
-                        }`}
-                      >
-                        {val === 'true' ? (
-                          <CheckCircle2 size={16} className={horoscopeAvailable === val ? 'text-white' : 'text-pink-400'} />
-                        ) : (
-                          <X size={16} className={horoscopeAvailable === val ? 'text-white' : 'text-gray-400'} />
-                        )}
-                        {val === 'true' ? 'Yes, Available' : 'No, Not Available'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {horoscopeAvailable === 'true' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Horoscope PDF Upload */}
-                    <div>
-                      <label className="block text-sm font-medium text-black mb-2">
-                        <span className="flex items-center gap-2">
-                          <Upload size={14} className="text-pink-600" />
-                          Horoscope PDF
-                        </span>
-                      </label>
-                      {horoscopePdfPreview ? (
-                        <div className="relative group">
-                          <div className="flex items-center gap-3 p-4 rounded-xl bg-pink-50 border border-pink-200">
-                            <div className="p-2 rounded-lg bg-pink-100 text-pink-700">
-                              <Upload size={20} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-pink-800 truncate">{horoscopePdfPreview}</p>
-                              <p className="text-xs text-pink-500">PDF uploaded</p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={removeHoroscopePdf}
-                              className="p-1.5 rounded-lg bg-white text-pink-600 hover:bg-pink-600 hover:text-white transition-colors shadow-sm"
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <label className="relative flex flex-col items-center justify-center w-full p-6 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-pink-400 hover:bg-pink-50/30 transition-all duration-200 group">
-                          <UploadCloud size={28} className="text-gray-300 group-hover:text-pink-500 transition-colors mb-2" />
-                          <span className="text-sm text-gray-500 group-hover:text-pink-600 font-medium">Choose PDF</span>
-                          <span className="text-xs text-gray-400 mt-1">Max 5MB</span>
-                          <input type="file" accept=".pdf" onChange={handleHoroscopePdfChange} className="absolute inset-0 opacity-0 cursor-pointer" />
-                        </label>
-                      )}
-                    </div>
-
-                    {/* Horoscope Image Upload */}
-                    <div>
-                      <label className="block text-sm font-medium text-black mb-2">
-                        <span className="flex items-center gap-2">
-                          <ImageIcon size={14} className="text-pink-600" />
-                          Horoscope Image
-                        </span>
-                      </label>
-                      {horoscopeImagePreview ? (
-                        <div className="relative group w-fit">
-                          <div className="relative overflow-hidden rounded-xl border-2 border-pink-200 shadow-md">
-                            <img src={horoscopeImagePreview} alt="Horoscope" className="h-32 w-32 object-cover" />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                              <button
-                                type="button"
-                                onClick={removeHoroscopeImage}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity p-2 bg-pink-600 text-white rounded-full hover:bg-pink-700 shadow-lg"
-                              >
-                                <X size={16} />
-                              </button>
-                            </div>
-                          </div>
-                          <p className="text-xs text-pink-600 mt-1 font-medium">Tap to remove</p>
-                        </div>
-                      ) : (
-                        <label className="relative flex flex-col items-center justify-center w-full p-6 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-pink-400 hover:bg-pink-50/30 transition-all duration-200 group">
-                          <UploadCloud size={28} className="text-gray-300 group-hover:text-pink-500 transition-colors mb-2" />
-                          <span className="text-sm text-gray-500 group-hover:text-pink-600 font-medium">Choose Image</span>
-                          <span className="text-xs text-gray-400 mt-1">JPG, PNG | Max 5MB</span>
-                          <input type="file" accept="image/*" onChange={handleHoroscopeImageChange} className="absolute inset-0 opacity-0 cursor-pointer" />
-                        </label>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+          <SectionCard id="astro" title="Traditional Horoscope" icon={Star} complete={completion.astro}>
+            <HoroscopeModule
+              value={horoscopeData}
+              onChange={setHoroscopeData}
+              onSyncFormFields={syncHoroscopeToForm}
+              onNextStep={() => scrollToSection('preferences')}
+              gothramOptions={GOTHRAM_OPTIONS}
+            />
           </SectionCard>
         ) : (
           <SectionCard id="astro" title="Astro Details" icon={Star} optional>
             <p className="text-gray-500 text-sm text-center py-4">
-              Astro details are available for Hindu profiles. Update your religion to Hindu to add astro information.
+              Astro details are available for Hindu profiles. Update your religion to Hindu to add horoscope information.
             </p>
           </SectionCard>
         )}

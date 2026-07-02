@@ -48,6 +48,7 @@ const initDb = async () => {
       'add_subscription_fields.sql',
       'add_astro_fields.sql',
       'add_astro_preference_columns.sql',
+      'add_horoscope_data.sql',
     ];
 
     for (const file of sqlFiles) {

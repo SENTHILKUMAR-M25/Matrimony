@@ -183,8 +183,17 @@ const ProfileDetailModal = ({ profile, open, onOpenChange, onApprove, onRejectCl
                 <Section title="Astrology">
                   <Field label="Rasi" value={profile.rasi} />
                   <Field label="Nakshatra" value={profile.nakshatra} />
-                  <Field label="Manglik" value={profile.manglik} />
-                  <Field label="Gotra" value={profile.gotra} />
+                  <Field label="Lagnam" value={profile.laknam || profile.horoscopeData?.fields?.lagnam} />
+                  <Field label="Dosham" value={profile.dhosham || profile.horoscopeData?.fields?.dosham} />
+                  <Field label="Gothram" value={profile.gothram || profile.horoscopeData?.fields?.gothram} />
+                  <Field label="Pada" value={profile.horoscopeData?.fields?.pada} />
+                  <Field label="Nadi" value={profile.horoscopeData?.fields?.nadi} />
+                  <Field label="Gana" value={profile.horoscopeData?.fields?.gana} />
+                  <Field label="Dasa" value={profile.horoscopeData?.fields?.dasa} />
+                  <Field label="Mahadasa" value={profile.horoscopeData?.fields?.mahadasa} />
+                  {profile.horoscopeData?.saved && (
+                    <Field label="Horoscope" value="Structured chart saved" />
+                  )}
                 </Section>
 
                 <Section title="Contact Info">

@@ -355,6 +355,7 @@ const getPendingProfiles = async (req, res) => {
               p.father_name, p.mother_name, p.siblings,
               p.country, p.state, p.city,
               p.profile_photo, p.approval_status, p.rejection_reason, p.rasi, p.nakshatra,
+              p.laknam, p.gothram, p.dhosham, p.horoscope_data,
               p.created_at as profile_created_at, p.updated_at as profile_updated_at
        FROM profiles p
        JOIN users u ON p.user_id = u.id
@@ -390,6 +391,16 @@ const getPendingProfiles = async (req, res) => {
       country: p.country,
       rasi: p.rasi,
       nakshatra: p.nakshatra,
+      laknam: p.laknam,
+      gothram: p.gothram,
+      dhosham: p.dhosham,
+      horoscopeData: (() => {
+        if (!p.horoscope_data) return null;
+        try {
+          const parsed = typeof p.horoscope_data === 'string' ? JSON.parse(p.horoscope_data) : p.horoscope_data;
+          return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch { return null; }
+      })(),
       profilePhoto: p.profile_photo,
       status: p.approval_status || 'pending',
       rejectionReason: p.rejection_reason,

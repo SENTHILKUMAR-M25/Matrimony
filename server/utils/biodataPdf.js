@@ -15,9 +15,9 @@ const SERVER_ROOT = path.join(__dirname, '..');
 const FONT_DIR = path.join(SERVER_ROOT, 'fonts');
 const UPLOADS_DIR = path.join(SERVER_ROOT, 'uploads');
 
-const PHOTO_MAX_WIDTH = 420;
-const PHOTO_MAX_HEIGHT = 520;
-const PHOTO_JPEG_QUALITY = 86;
+const PHOTO_MAX_WIDTH = 1200;
+const PHOTO_MAX_HEIGHT = 1600;
+const PHOTO_JPEG_QUALITY = 95;
 const FETCH_TIMEOUT_MS = 12_000;
 const LOGO_MAX_BYTES = 900_000;
 
@@ -417,44 +417,12 @@ const buildHeader = () => {
 };
 
 const buildProfileHero = (profile, photoDataUrl, hasRealPhoto) => {
-  const photoFrame = {
-    table: {
-      widths: [96],
-      body: [[{
-        stack: [{
-          image: photoDataUrl,
-          width: 88,
-          height: 108,
-          fit: [88, 108],
-          alignment: 'center',
-        }],
-        fillColor: '#FFFFFF',
-        margin: [4, 4, 4, 4],
-      }]],
-    },
-    layout: {
-      hLineWidth: () => 2,
-      vLineWidth: () => 2,
-      hLineColor: () => (hasRealPhoto ? BRAND.secondary : BRAND.border),
-      vLineColor: () => (hasRealPhoto ? BRAND.secondary : BRAND.border),
-    },
-  };
-
-  const outerFrame = {
-    table: {
-      widths: [104],
-      body: [[{
-        stack: [photoFrame],
-        fillColor: hasRealPhoto ? '#FDF4FF' : '#F9F5FF',
-        margin: [2, 2, 2, 2],
-      }]],
-    },
-    layout: {
-      hLineWidth: () => 1,
-      vLineWidth: () => 1,
-      hLineColor: () => BRAND.gold,
-      vLineColor: () => BRAND.gold,
-    },
+  const photoContainer = {
+    stack: [{
+      image: photoDataUrl,
+      width: 110,
+      alignment: 'center',
+    }],
   };
 
   const highlights = [
@@ -468,9 +436,9 @@ const buildProfileHero = (profile, photoDataUrl, hasRealPhoto) => {
 
   return {
     table: {
-      widths: [112, '*'],
+      widths: [122, '*'],
       body: [[
-        outerFrame,
+        photoContainer,
         {
           stack: [
             { text: profile.fullName || '—', style: 'profileName' },
@@ -573,17 +541,15 @@ const buildDocDefinition = (profile, { isPremium, photoDataUrl, hasRealPhoto }) 
       ['Horoscope Available', profile.horoscopeAvailable ? 'Yes' : 'No'],
     ]),
 
-    sectionHeader('Horoscope & Astro Details'),
-    fieldTable([
-      ['Date of Birth', gated(formatDate(profile.dateOfBirth), isPremium)],
-      ['Time of Birth', gated(profile.timeOfBirth, isPremium)],
-      ['Place of Birth', gated(profile.placeOfBirth, isPremium)],
-      ['Rasi', fmt(profile.rasi)],
-      ['Nakshatra', fmt(profile.nakshatra)],
-      ['Lagnam (Laknam)', gated(profile.laknam, isPremium)],
-      ['Dosham', fmt(profile.dhosham)],
-      ['Gothram', gated(profile.gothram, isPremium)],
-      ['Horoscope Match Required', profile.horoscopeMatchRequired ? 'Yes' : 'No'],
+    ...(buildHoroscopeSection(profile) || [
+      sectionHeader('Horoscope & Astro Details'),
+      fieldTable([
+        ['Rasi', fmt(profile.rasi)],
+        ['Nakshatra', fmt(profile.nakshatra)],
+        ['Lagnam (Laknam)', fmt(profile.laknam)],
+        ['Gothram', fmt(profile.gothram)],
+        ['Dosham', fmt(profile.dhosham)],
+      ]),
     ]),
 
     sectionHeader('Partner Preferences'),
@@ -686,6 +652,134 @@ const generateBiodataPdf = async (profile, { isPremium = false, profilePhotoPath
   const docDefinition = buildDocDefinition(profile, { isPremium, photoDataUrl, hasRealPhoto });
   const pdfDoc = pdfmake.createPdf(docDefinition);
   return pdfDoc.getBuffer();
+};
+
+// ─── Premium horoscope chart rendering ────────────────────────────
+const PLANET_ABBR = {
+  Sun: 'Su', Moon: 'Mo', Mars: 'Ma', Mercury: 'Me', Jupiter: 'Ju',
+  Venus: 'Ve', Saturn: 'Sa', Rahu: 'Ra', Ketu: 'Ke', Lagna: 'Lg',
+};
+
+const chartCell = (houseNum, planets) => {
+  const abbrs = (planets || []).map(p => PLANET_ABBR[p] || p).join('  ');
+  return {
+    stack: [
+      { text: String(houseNum), fontSize: 5.5, color: '#9CA3AF', alignment: 'right', margin: [0, 0, 2, 0] },
+      { text: abbrs, fontSize: 9, bold: true, color: BRAND.dark, alignment: 'center', margin: [0, 2, 0, 0] },
+    ],
+  };
+};
+
+const buildChartTable = (chartData) => {
+  if (!chartData) return null;
+  const emptyCell = { text: '', fillColor: '#FDF4FF' };
+  const body = [
+    [chartCell(12, chartData['12']), chartCell(1, chartData['1']), chartCell(2, chartData['2']), chartCell(3, chartData['3'])],
+    [chartCell(11, chartData['11']), emptyCell, emptyCell, chartCell(4, chartData['4'])],
+    [chartCell(10, chartData['10']), emptyCell, emptyCell, chartCell(5, chartData['5'])],
+    [chartCell(9, chartData['9']), chartCell(8, chartData['8']), chartCell(7, chartData['7']), chartCell(6, chartData['6'])],
+  ];
+  return {
+    table: { widths: ['*', '*', '*', '*'], body },
+    layout: {
+      hLineWidth: (i, node) => {
+        if (i === 0 || i === node.table.body.length) return 2;
+        if (i === 2) return 0;
+        return 0.5;
+      },
+      vLineWidth: (j, node) => {
+        if (j === 0 || j === node.table.widths.length) return 2;
+        if (j === 2) return 0;
+        return 0.5;
+      },
+      hLineColor: (i, node) => {
+        if (i === 0 || i === node.table.body.length) return BRAND.primary;
+        return BRAND.border;
+      },
+      vLineColor: (j, node) => {
+        if (j === 0 || j === node.table.widths.length) return BRAND.primary;
+        return BRAND.border;
+      },
+      paddingLeft: () => 5,
+      paddingRight: () => 5,
+      paddingTop: () => 6,
+      paddingBottom: () => 6,
+    },
+  };
+};
+
+const chartColumn = (title, chartData) => ({
+  stack: [
+    {
+      text: title,
+      fontSize: 8,
+      bold: true,
+      color: BRAND.dark,
+      alignment: 'center',
+      background: '#FDF4FF',
+      margin: [0, 0, 0, 5],
+    },
+    buildChartTable(chartData),
+  ],
+});
+
+const buildHoroscopeSection = (profile) => {
+  const hd = profile.horoscopeData;
+  if (!hd || typeof hd !== 'object') return null;
+
+  const rasiChart = hd.rasiChart && typeof hd.rasiChart === 'object' ? hd.rasiChart : null;
+  const navamsaChart = hd.navamsaChart && typeof hd.navamsaChart === 'object' ? hd.navamsaChart : null;
+  const hasRasi = rasiChart && Object.values(rasiChart).some(arr => Array.isArray(arr) && arr.length > 0);
+  const hasNavamsa = navamsaChart && Object.values(navamsaChart).some(arr => Array.isArray(arr) && arr.length > 0);
+  if (!hasRasi && !hasNavamsa) return null;
+
+  const flds = hd.fields || {};
+
+  const chartsContent = {
+    table: {
+      widths: ['50%', '50%'],
+      body: [[
+        chartColumn('RASI CHART (D1)', rasiChart),
+        chartColumn('NAVAMSA CHART (D9)', navamsaChart),
+      ]],
+    },
+    layout: 'noBorders',
+    margin: [0, 0, 0, 14],
+  };
+
+  const astroFields = [
+    ['Rasi', fmt(flds.rasi)],
+    ['Nakshatra', fmt(flds.nakshatra)],
+    ['Lagnam', fmt(flds.lagnam)],
+    ['Pada', fmt(flds.pada)],
+    ['Gothram', fmt(flds.gothram)],
+    ['Dosham', fmt(flds.dosham)],
+    ['Chevvai Dosham', fmt(flds.chevvaiDosham)],
+    ['Nadi', fmt(flds.nadi)],
+    ['Yoni', fmt(flds.yoni)],
+    ['Rajju', fmt(flds.rajju)],
+    ['Gana', fmt(flds.gana)],
+    ['Dasa', fmt(flds.dasa)],
+    ['Mahadasa', fmt(flds.mahadasa)],
+  ];
+
+  return [
+    sectionHeader('Horoscope & Astro Details'),
+    {
+      table: {
+        widths: ['*', 'auto', '*'],
+        body: [[
+          { text: '' },
+          { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 200, y2: 0, lineWidth: 1.5, lineColor: BRAND.gold }] },
+          { text: '' },
+        ]],
+      },
+      layout: 'noBorders',
+      margin: [0, -6, 0, 10],
+    },
+    chartsContent,
+    fieldTable(astroFields),
+  ];
 };
 
 module.exports = { generateBiodataPdf, preloadAssets, loadProfilePhotoDataUrl };

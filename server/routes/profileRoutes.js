@@ -31,13 +31,6 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  if (file.fieldname === 'horoscopePdf') {
-    const allowed = /pdf/;
-    const ext = allowed.test(path.extname(file.originalname).toLowerCase());
-    const mime = /application\/pdf/.test(file.mimetype);
-    if (ext && mime) return cb(null, true);
-    return cb(new Error('Only PDF files are allowed for horoscope'));
-  }
   const allowed = /jpeg|jpg|png|webp/;
   const ext = allowed.test(path.extname(file.originalname).toLowerCase());
   const mime = allowed.test(file.mimetype);
@@ -57,8 +50,6 @@ const upload = multer({
 const uploadFields = upload.fields([
   { name: 'profilePhoto', maxCount: 1 },
   { name: 'additionalPhotos', maxCount: 5 },
-  { name: 'horoscopePdf', maxCount: 1 },
-  { name: 'horoscopeImage', maxCount: 1 },
 ]);
 
 // Routes (specific paths before /:id)

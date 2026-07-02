@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import API from '../../api/axios';
 import useAuthStore from '../../store/useAuthStore';
+import HoroscopeDisplay from '../../components/horoscope/HoroscopeDisplay';
 
 const DetailItem = ({ label, value }) => (
   <div className="py-3 px-4 rounded-xl bg-gray-50/50 border border-gray-100 hover:border-gray-200 hover:bg-white transition-all duration-200">
@@ -229,42 +230,23 @@ const MyProfile = () => {
           </SectionBlock>
 
           {/* Section: Astrological Matrix */}
-          {profile.rasi && (
-            <SectionBlock icon={Star} title="Astrological Alignment Chart" description="Traditional alignment parameters">
-              <DetailItem label="Date of Birth" value={profile.dateOfBirth} />
-              <DetailItem label=" Time of Birth" value={profile.timeOfBirth} />
-              <DetailItem label="Place of Birth" value={profile.placeOfBirth} />
-              <DetailItem label="Moon Sign / Rasi" value={profile.rasi} />
-              <DetailItem label="Birth Star / Nakshatra" value={profile.nakshatra} />
-              <DetailItem label="Ascendant / Laknam" value={profile.laknam} />
-              <DetailItem label="Gothram Lineage" value={profile.gothram} />
-              <DetailItem label="Dhosham Presences" value={profile.dhosham} />
-              
-              {profile.horoscopeAvailable && (
-                <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2 pt-4 border-t border-gray-100">
-                  {profile.horoscopePdf && (
-                    <div className="p-4 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 flex flex-col justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-bold text-gray-800 uppercase tracking-wide">Natal Chart PDF</p>
-                        <p className="text-[11px] text-gray-400 mt-0.5">Official traditional generated layout</p>
-                      </div>
-                      <a href={profile.horoscopePdf} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs font-bold text-pink-600 hover:text-pink-700 bg-white shadow-sm border border-gray-100 px-3 py-2 rounded-lg w-fit transition-all">
-                        <FileText size={14} /> Review Document
-                      </a>
-                    </div>
-                  )}
-                  {profile.horoscopeImage && (
-                    <div className="p-4 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 flex items-center justify-between gap-4">
-                      <div className="space-y-1">
-                        <p className="text-xs font-bold text-gray-800 uppercase tracking-wide">Chart Visualization</p>
-                        <p className="text-[11px] text-gray-400">Raster graphic image matrix file</p>
-                      </div>
-                      <a href={profile.horoscopeImage} target="_blank" rel="noopener noreferrer" className="shrink-0 group relative rounded-lg overflow-hidden border border-gray-200">
-                        <img src={profile.horoscopeImage} alt="Horoscope Thumbnail" className="h-12 w-12 object-cover group-hover:scale-105 transition-transform duration-200" />
-                      </a>
-                    </div>
-                  )}
+          {(profile.horoscopeData || profile.rasi) && (
+            <SectionBlock icon={Star} title="Traditional Horoscope" description="South Indian Rasi & Navamsa charts">
+              {profile.horoscopeData ? (
+                <div className="sm:col-span-2">
+                  <HoroscopeDisplay horoscopeData={profile.horoscopeData} />
                 </div>
+              ) : (
+                <>
+                  <DetailItem label="Date of Birth" value={profile.dateOfBirth} />
+                  <DetailItem label="Time of Birth" value={profile.timeOfBirth} />
+                  <DetailItem label="Place of Birth" value={profile.placeOfBirth} />
+                  <DetailItem label="Moon Sign / Rasi" value={profile.rasi} />
+                  <DetailItem label="Birth Star / Nakshatra" value={profile.nakshatra} />
+                  <DetailItem label="Ascendant / Laknam" value={profile.laknam} />
+                  <DetailItem label="Gothram Lineage" value={profile.gothram} />
+                  <DetailItem label="Dhosham Presences" value={profile.dhosham} />
+                </>
               )}
             </SectionBlock>
           )}
