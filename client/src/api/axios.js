@@ -19,7 +19,8 @@ API.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
-      window.location.href = '/signin';
+      const isAdminRequest = error.config?.url?.startsWith('/admin/');
+      window.location.href = isAdminRequest ? '/admin-login' : '/signin';
     }
     return Promise.reject(error);
   }

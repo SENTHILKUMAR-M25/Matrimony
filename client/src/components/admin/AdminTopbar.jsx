@@ -27,7 +27,7 @@ const AdminTopbar = () => {
   const handleLogout = () => {
     setProfileOpen(false);
     logout();
-    navigate('/signin');
+    navigate('/admin-login');
   };
 
   return (

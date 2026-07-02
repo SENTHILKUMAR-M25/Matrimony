@@ -6,6 +6,10 @@ import AdminLayout from './layouts/AdminLayout';
 import HomePage from './pages/HomePage';
 import SignInPage from './pages/SignInPage';
 import SignUpPage from './pages/SignUpPage';
+import AdminSignInPage from './pages/AdminSignInPage';
+import AdminLoginPage from './pages/AdminLoginPage';
+import AdminForgotPasswordPage from './pages/AdminForgotPasswordPage';
+import AdminResetPasswordPage from './pages/AdminResetPasswordPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import LoadingScreen from './components/LoadingScreen';
@@ -71,6 +75,11 @@ const AppContent = () => {
           <Route path="submit-story" element={<SubmitSuccessStory />} />
           <Route path="my-stories" element={<MyStories />} />
         </Route>
+
+        <Route path="admin-login" element={<AdminLoginPage />} />
+        <Route path="admin-forgot-password" element={<AdminForgotPasswordPage />} />
+        <Route path="admin-reset-password" element={<AdminResetPasswordPage />} />
+        <Route path="admin/signin" element={<AdminSignInPage />} />
 
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />

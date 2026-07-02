@@ -24,11 +24,15 @@ const useAuthStore = create(
         return state.isAuthenticated && state.user?.is_admin === true;
       },
 
-      logout: () => set({
-        isAuthenticated: false,
-        user: null,
-        token: null,
-      }),
+      logout: () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('admin_remember_identifier');
+        return set({
+          isAuthenticated: false,
+          user: null,
+          token: null,
+        });
+      },
 
       updateProfile: (profileData) => set((state) => ({
         user: { ...state.user, ...profileData },

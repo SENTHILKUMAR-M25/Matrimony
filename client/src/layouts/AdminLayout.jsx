@@ -30,7 +30,7 @@ const AdminLayout = () => {
   useEffect(() => {
     if (!isAuthenticated) {
       const currentPath = location.pathname + location.search;
-      navigate(`/signin?redirect=${encodeURIComponent(currentPath)}`, { replace: true });
+      navigate(`/admin-login?redirect=${encodeURIComponent(currentPath)}`, { replace: true });
       return;
     }
     if (!isAdmin()) {
