@@ -40,26 +40,26 @@ const KolamMotif = ({ className = '', uid }) => {
 const AdminLoginPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { login, isAuthenticated, isAdmin } = useAuthStore();
+  const { login, isAuthenticated, isAdmin, isTokenValid } = useAuthStore();
   const shouldReduceMotion = useReducedMotion();
 
   const [formData, setFormData] = useState({ identifier: '', password: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(() => localStorage.getItem('admin_remember_identifier') || '');
+  const [rememberMe, setRememberMe] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated && isAdmin()) {
+    if (isAuthenticated && isAdmin() && isTokenValid()) {
       navigate('/admin', { replace: true });
     }
-  }, [isAuthenticated, isAdmin, navigate]);
+  }, [isAuthenticated, isAdmin, navigate, isTokenValid]);
 
   useEffect(() => {
     const saved = localStorage.getItem('admin_remember_identifier');
     if (saved) {
       setFormData((prev) => ({ ...prev, identifier: saved }));
-      setRememberMe(saved);
+      setRememberMe(true);
     }
   }, []);
 
@@ -84,11 +84,10 @@ const AdminLoginPage = () => {
     const checked = e.target.checked;
     if (checked) {
       localStorage.setItem('admin_remember_identifier', formData.identifier);
-      setRememberMe(formData.identifier);
     } else {
       localStorage.removeItem('admin_remember_identifier');
-      setRememberMe('');
     }
+    setRememberMe(checked);
   };
 
   const handleSubmit = async (e) => {
@@ -106,6 +105,8 @@ const AdminLoginPage = () => {
       login(user, token);
       if (rememberMe) {
         localStorage.setItem('admin_remember_identifier', formData.identifier);
+      } else {
+        localStorage.removeItem('admin_remember_identifier');
       }
       const redirect = searchParams.get('redirect');
       navigate(redirect || '/admin', { replace: true });
@@ -256,7 +257,7 @@ const AdminLoginPage = () => {
                     <input
                       id="admin-remember"
                       type="checkbox"
-                      checked={!!rememberMe}
+                      checked={rememberMe}
                       onChange={handleRememberChange}
                       className="h-4 w-4 rounded accent-indigo-500 border-slate-600 bg-slate-700"
                     />

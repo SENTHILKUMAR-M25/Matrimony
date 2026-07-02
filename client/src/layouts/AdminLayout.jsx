@@ -15,7 +15,7 @@ const pageVariants = {
 const AdminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, user, isAdmin } = useAuthStore();
+  const { isAuthenticated, user, isAdmin, isTokenValid } = useAuthStore();
   const { isSidebarOpen, setSidebarOpen } = useDashboardStore();
 
   useEffect(() => {
@@ -28,7 +28,7 @@ const AdminLayout = () => {
   }, [isSidebarOpen]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !isTokenValid()) {
       const currentPath = location.pathname + location.search;
       navigate(`/admin-login?redirect=${encodeURIComponent(currentPath)}`, { replace: true });
       return;
@@ -36,9 +36,9 @@ const AdminLayout = () => {
     if (!isAdmin()) {
       navigate('/dashboard', { replace: true });
     }
-  }, [isAuthenticated, user, navigate, location.pathname, isAdmin]);
+  }, [isAuthenticated, user, navigate, location.pathname, isAdmin, isTokenValid]);
 
-  if (!isAuthenticated || !isAdmin()) return null;
+  if (!isAuthenticated || !isAdmin() || !isTokenValid()) return null;
 
   return (
     <div className="flex h-screen h-[100dvh] bg-gray-50 text-gray-900 overflow-hidden font-sans">

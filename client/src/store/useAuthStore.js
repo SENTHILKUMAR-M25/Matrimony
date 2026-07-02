@@ -1,6 +1,16 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+const isTokenExpired = (token) => {
+  if (!token) return true;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+};
+
 const useAuthStore = create(
   persist(
     (set, get) => ({
@@ -22,6 +32,11 @@ const useAuthStore = create(
       isAdmin: () => {
         const state = get();
         return state.isAuthenticated && state.user?.is_admin === true;
+      },
+
+      isTokenValid: () => {
+        const state = get();
+        return !!state.token && !isTokenExpired(state.token);
       },
 
       logout: () => {

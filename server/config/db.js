@@ -8,7 +8,7 @@ const pool = mysql.createPool({
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'matrimony',
   waitForConnections: true,
-  connectionLimit: 4,
+  connectionLimit: 1,
   queueLimit: 0,
 });
 
